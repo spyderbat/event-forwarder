@@ -1,0 +1,12 @@
+[Unit]
+Description=Spyderbat Event Forwarder
+
+[Service]
+User=sbevents
+ExecStart=/opt/spyderbat-events/bin/spyderbat-event-forwarder -c /opt/spyderbat-events/etc/config.yaml
+WorkingDirectory=/opt/spyderbat-events
+Restart=always
+Type=simple
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,6 @@
+*.log
+config.yaml
+spyderbat-event-forwarder
+spyderbat-event-forwarder.aarch64
+spyderbat-event-forwarder.x86_64
+*.tgz

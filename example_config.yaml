@@ -1,0 +1,17 @@
+# your spyderbat org UID goes here
+spyderbat_org_uid: your_org_uid
+
+# your spyderbat API key goes here
+spyderbat_secret_api_key: your_api_key
+
+# optionally override the API endpoint (used for testing)
+api_host:
+
+# specify the location to write logs and keep state
+log_path: /opt/spyderbat-events/var/log
+
+# optionally enable forwarding to the host's syslog daemon for forwarding or collection by other agents
+# NOTE: This is not recommended if syslog messages are forwarded over unencrypted channels to other hosts.
+# NOTE: This is not required for Splunk integration.
+# local_syslog_forwarding: true
+

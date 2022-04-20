@@ -70,7 +70,6 @@ func (a *API) SourceDataQuery(ctx context.Context, st time.Time, et time.Time) (
 	req.Header.Add("Accept", "application/x-ndjson, application/ndjson")
 	resp, err := a.client.Do(req)
 	if err != nil {
-		resp.Body.Close()
 		return nil, err
 	}
 

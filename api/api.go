@@ -55,6 +55,7 @@ func New(c *config.Config) *API {
 			ExpectContinueTimeout: 1 * time.Second,
 			DisableKeepAlives:     false,
 			DisableCompression:    false,
+			Proxy:                 http.ProxyFromEnvironment,
 		}}}
 }
 

@@ -25,6 +25,7 @@ import (
 	"spyderbat-event-forwarder/record"
 
 	"github.com/golang/groupcache/lru"
+	"github.com/valyala/fastjson"
 	"golang.org/x/crypto/blake2b"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -110,6 +111,7 @@ func printVersion() {
 
 func main() {
 
+	log.SetFlags(0)
 	configPath := flag.String("c", "config.yaml", "path to config file")
 	flag.Parse()
 
@@ -217,7 +219,15 @@ func main() {
 				lastTime = last.Time
 			}
 
-			eventLog.Print(string(record))
+			r := string(record)
+
+			// Results should always be JSON. Log non-JSON records separately.
+			err = fastjson.Validate(r)
+			if err == nil {
+				eventLog.Print(r)
+			} else {
+				log.Printf("invalid record: %s", r)
+			}
 		}
 		r.Close()
 		if err := scanner.Err(); err != nil {

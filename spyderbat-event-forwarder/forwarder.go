@@ -153,6 +153,20 @@ func main() {
 
 	sapi := api.New(cfg)
 
+	_ = sapi.RefreshSources(context.TODO())
+	go func() {
+		t := time.NewTicker(5 * time.Minute)
+		for {
+			<-t.C
+			err := sapi.RefreshSources(context.Background())
+			if err == nil {
+				log.Printf("refreshed sources")
+			} else {
+				log.Printf("error refreshing sources: %s", err)
+			}
+		}
+	}()
+
 	// struct to decode log time from json records
 	last := new(record.Record)
 
@@ -219,12 +233,15 @@ func main() {
 				lastTime = last.Time
 			}
 
-			r := string(record)
+			// Augment the record with runtime_details from the muid.
+			// This is harmless in the rare case we pass non-JSON, since we
+			// perform JSON validation next.
+			sapi.AugmentRuntimeDetailsJSON(&record)
 
 			// Results should always be JSON. Log non-JSON records separately.
-			err = fastjson.Validate(r)
+			err = fastjson.ValidateBytes(record)
 			if err == nil {
-				eventLog.Print(r)
+				eventLog.Print(string(record))
 			} else {
 				log.Printf("invalid record: %s", r)
 			}

@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"spyderbat-event-forwarder/config"
+
+	"github.com/puzpuzpuz/xsync"
 )
 
 const urlBase = "/api/v1/org/"
@@ -22,7 +24,7 @@ type APIError struct {
 }
 
 func (e *APIError) Error() string {
-	msg := fmt.Sprintf("%s", e.Status)
+	msg := e.Status
 	if len(e.Ctx) > 0 {
 		msg = fmt.Sprintf("%s; spyderbat support id %s", msg, e.Ctx)
 	}
@@ -41,6 +43,7 @@ func (e *APIError) Error() string {
 type API struct {
 	config *config.Config
 	client *http.Client
+	muid   *xsync.MapOf[RuntimeDetails]
 }
 
 func New(c *config.Config) *API {
@@ -56,7 +59,39 @@ func New(c *config.Config) *API {
 			DisableKeepAlives:     false,
 			DisableCompression:    false,
 			Proxy:                 http.ProxyFromEnvironment,
-		}}}
+		}},
+		muid: xsync.NewMapOf[RuntimeDetails](),
+	}
+}
+
+// SourceQuery queries the API for sources
+func (a *API) SourceQuery(ctx context.Context) (io.ReadCloser, error) {
+	url := fmt.Sprintf("https://%s%s%s/source/", a.config.APIHost, urlBase, a.config.OrgUID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+a.config.APIKey)
+	req.Header.Add("Accept", "application/json")
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode == http.StatusOK {
+		return resp.Body, nil
+	}
+
+	resp.Body.Close()
+
+	return nil, &APIError{
+		Status:     resp.Status,
+		StatusCode: resp.StatusCode,
+		Ctx:        resp.Header.Get("X-Context-Uid"),
+		Expiration: resp.Header.Get("X-Jwt-Expiration"),
+		ServerTime: resp.Header.Get("X-Server-Time"),
+	}
 }
 
 // SourceDataQuery queries the API for events within a time range

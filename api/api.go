@@ -95,8 +95,8 @@ func (a *API) SourceQuery(ctx context.Context) (io.ReadCloser, error) {
 }
 
 // SourceDataQuery queries the API for events within a time range
-func (a *API) SourceDataQuery(ctx context.Context, st time.Time, et time.Time) (io.ReadCloser, error) {
-	url := fmt.Sprintf("https://%s%s%s/data?dt=redflags&st=%d&et=%d", a.config.APIHost, urlBase, a.config.OrgUID, st.Unix(), et.Unix())
+func (a *API) SourceDataQuery(ctx context.Context, dataType string, st, et time.Time) (io.ReadCloser, error) {
+	url := fmt.Sprintf("https://%s%s%s/data?dt=%s&st=%d&et=%d", a.config.APIHost, urlBase, a.config.OrgUID, dataType, st.Unix(), et.Unix())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

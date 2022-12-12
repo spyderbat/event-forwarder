@@ -9,10 +9,11 @@ import (
 )
 
 type RuntimeDetails struct {
-	CloudInstanceID string   `json:"cloud_instance_id,omitempty"`
-	IPAddresses     []string `json:"ip_addresses"`
-	MACAddresses    []string `json:"mac_addresses"`
-	Hostname        string   `json:"hostname"`
+	CloudInstanceID  string   `json:"cloud_instance_id,omitempty"`
+	IPAddresses      []string `json:"ip_addresses"`
+	MACAddresses     []string `json:"mac_addresses"`
+	Hostname         string   `json:"hostname"`
+	ForwarderVersion string   `json:"forwarder_version"`
 }
 
 type Source struct {
@@ -22,7 +23,8 @@ type Source struct {
 
 // AugmentRuntimeDetailsJSON takes JSON input, extracts the muid if there is one,
 // and augments the JSON with runtime_details from the source, if available.
-func (a *API) AugmentRuntimeDetailsJSON(record *[]byte) {
+// It also adds the version of the forwarder to the JSON.
+func (a *API) AugmentRuntimeDetailsJSON(record *[]byte, version string) {
 	if record == nil || len(*record) < 2 {
 		return
 	}
@@ -36,6 +38,7 @@ func (a *API) AugmentRuntimeDetailsJSON(record *[]byte) {
 	if !found {
 		return
 	}
+	details.ForwarderVersion = version
 
 	d, err := json.Marshal(details)
 	if err != nil {

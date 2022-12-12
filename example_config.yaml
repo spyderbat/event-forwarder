@@ -10,6 +10,11 @@ api_host:
 # specify the location to write logs and keep state
 log_path: /opt/spyderbat-events/var/log
 
+# specify data types to collect
+# valid values are: redflags, spydergraphs
+# the default is: redflags
+data_types: redflags
+
 # optionally enable forwarding to the host's syslog daemon for forwarding or collection by other agents
 # NOTE: This is not recommended if syslog messages are forwarded over unencrypted channels to other hosts.
 # NOTE: This is not required for Splunk integration.

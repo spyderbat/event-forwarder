@@ -84,7 +84,8 @@ func loadState(LogPath string) (record.RecordTime, error) {
 	return lastTime, nil
 }
 
-func printVersion() {
+// version prints version info and returns the short git commit hash
+func version() string {
 	vcsrevision := "unknown"
 	vcsdirty := ""
 	vcstime := "unknown"
@@ -106,7 +107,16 @@ func printVersion() {
 		version = info.GoVersion
 	}
 
+	shortHash := vcsrevision
+	if len(shortHash) > 7 {
+		shortHash = shortHash[:7]
+	}
+	if vcsdirty != "" {
+		shortHash += "+dirty"
+	}
+
 	log.Printf("starting spyderbat-event-forwarder (commit %s%s; %s; %s; %s)", vcsrevision, vcsdirty, vcstime, version, runtime.GOARCH)
+	return shortHash
 }
 
 func main() {
@@ -115,15 +125,18 @@ func main() {
 	configPath := flag.String("c", "config.yaml", "path to config file")
 	flag.Parse()
 
-	printVersion()
+	shortHash := version()
 	cfg, err := config.LoadConfig(*configPath)
 	if err != nil {
 		log.Fatalf("fatal: %s", err)
 	}
 
+	dataTypes := cfg.GetDataTypes()
+
 	log.Printf("org uid: %s", cfg.OrgUID)
 	log.Printf("api host: %s", cfg.APIHost)
 	log.Printf("log path: %s", cfg.LogPath)
+	log.Printf("data types: %s", strings.Join(dataTypes, ", "))
 	log.Printf("local syslog forwarding: %v", cfg.LocalSyslogForwarding)
 
 	lastTime, err := loadState(cfg.LogPath)
@@ -203,13 +216,23 @@ func main() {
 			st = minStart
 		}
 
-		r, err := sapi.SourceDataQuery(context.TODO(), st, et)
-		if err != nil {
-			log.Printf("error querying source data: %v", err)
+		fh := []io.Reader{}
+
+		for _, dt := range dataTypes {
+			f, err := sapi.SourceDataQuery(context.TODO(), dt, st, et)
+			if err != nil {
+				log.Printf("error querying source for %s data: %v", dt, err)
+			}
+			if f != nil {
+				fh = append(fh, f)
+			}
+		}
+
+		if len(fh) == 0 {
 			continue
 		}
 
-		scanner := bufio.NewScanner(r)
+		scanner := bufio.NewScanner(io.MultiReader(fh...))
 		recordsRetrieved := 0
 		newRecords := 0
 
@@ -236,17 +259,21 @@ func main() {
 			// Augment the record with runtime_details from the muid.
 			// This is harmless in the rare case we pass non-JSON, since we
 			// perform JSON validation next.
-			sapi.AugmentRuntimeDetailsJSON(&record)
+			sapi.AugmentRuntimeDetailsJSON(&record, shortHash)
 
 			// Results should always be JSON. Log non-JSON records separately.
 			err = fastjson.ValidateBytes(record)
 			if err == nil {
 				eventLog.Print(string(record))
 			} else {
-				log.Printf("invalid record: %s", r)
+				log.Printf("invalid record: %s", record)
 			}
 		}
-		r.Close()
+		for _, f := range fh {
+			if closer, ok := f.(io.Closer); ok {
+				closer.Close()
+			}
+		}
 		if err := scanner.Err(); err != nil {
 			log.Printf("error processing records: %s", err)
 		}

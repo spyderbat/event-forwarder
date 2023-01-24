@@ -1,0 +1,1 @@
+Thank you for installing the Spyderbat Event Forwarder.  You should be collecting logs now.

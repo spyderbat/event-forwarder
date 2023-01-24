@@ -140,6 +140,10 @@ func main() {
 		},
 	}
 
+	if cfg.StdOut {
+		logWriters = append(logWriters, os.Stdout)
+	}
+
 	if cfg.LocalSyslogForwarding {
 		w, err := syslog.Dial("", "", syslog.LOG_ALERT, "spyderbat-event")
 		if err != nil {

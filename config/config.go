@@ -19,6 +19,7 @@ type Config struct {
 	OrgUID                string `yaml:"spyderbat_org_uid"`
 	APIKey                string `yaml:"spyderbat_secret_api_key"`
 	LocalSyslogForwarding bool   `yaml:"local_syslog_forwarding"`
+	StdOut                bool   `yaml:"stdout"`
 }
 
 // configItem validation

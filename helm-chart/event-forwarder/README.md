@@ -4,3 +4,13 @@
 ```
 helm install <release-name> . --set spyderbat.spyderbat_org_uid=<ORG_ID> --set spyderbat.spyderbat_secret_api_key=<API_KEY> --create-namespace
 ```
+
+## Values to override
+
+| value | description | default|required|
+|--------|-------------|--------|----|
+|spyderbat.spyderbat_org_uid | org uid to use | your_org_uid| Y|
+|spyderbat.spyderbat_secret_api_key | api key from console | your_api_key|Y|
+|spyderbat.api_host | api host to use | api.prod.spyderbat.com|N
+|spyderbat.namespace| namespace to install to| spyderbat|N
+|persistence.storageClass | pvc storageClass | default|N

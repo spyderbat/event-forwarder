@@ -40,6 +40,10 @@ tolerations: []
 
 affinity: {}
 
+# persistence storage class
+persistence:
+  storageClass: default
+
 spyderbat:
   spyderbat_org_uid: your_org_uid
   spyderbat_secret_api_key: your_api_key

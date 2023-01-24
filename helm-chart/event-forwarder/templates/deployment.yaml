@@ -1,11 +1,12 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ include "event-forwarder.fullname" . }}
   namespace: {{ .Values.spyderbat.namespace }}
   labels:
     {{- include "event-forwarder.labels" . | nindent 4 }}
 spec:
+  serviceName: {{ include "event-forwarder.fullname" . }}
   selector:
     matchLabels:
       {{- include "event-forwarder.selectorLabels" . | nindent 6 }}
@@ -22,6 +23,9 @@ spec:
       - configMap:
           name: {{ include "event-forwarder.fullname" . }}
         name: config
+      - name: persistent-storage
+        persistentVolumeClaim:
+          claimName: {{ include "event-forwarder.fullname" . }}-pvc
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -37,6 +41,8 @@ spec:
             mountPath: /opt/local/spyderbat/config.yaml
             subPath: config.yaml
             readOnly: true
+          - mountPath: /opt/local/spyderbat/var/log
+            name: persistent-storage
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

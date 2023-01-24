@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ template "event-forwarder.fullname" . }}
-  namespace: {{ .Values.spyderbat.namespace }}
+  namespace: {{ .Release.Namespace}}
   labels:
     app: {{ template "event-forwarder.fullname" . }}
     chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"

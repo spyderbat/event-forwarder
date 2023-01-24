@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: {{ include "event-forwarder.fullname" . }}
-  namespace: {{ .Values.spyderbat.namespace }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "event-forwarder.labels" . | nindent 4 }}
 spec:

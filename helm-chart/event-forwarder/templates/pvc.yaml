@@ -2,7 +2,7 @@ kind: PersistentVolumeClaim
 apiVersion: v1
 metadata:
   name: {{ include "event-forwarder.fullname" . }}-pvc
-  namespace: {{ .Values.spyderbat.namespace }}
+  namespace: {{ .Release.Namespace }}
   labels:
     app: {{ include "event-forwarder.fullname" . }}
     chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"

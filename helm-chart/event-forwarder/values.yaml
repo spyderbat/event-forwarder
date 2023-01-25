@@ -42,7 +42,7 @@ affinity: {}
 
 # persistence storage class
 persistence:
-  storageClass: default
+  storageClass: ""
 
 spyderbat:
   spyderbat_org_uid: your_org_uid

@@ -25,5 +25,5 @@ data:
       stdout: true
 
       matching_filter: {{ .Values.spyderbat.matching_filter }}
-      linkback: true
+      linkback: {{ .Values.spyderbat.linkback }}
       ui_url: {{ .Values.spyderbat.ui_url }}

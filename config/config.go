@@ -20,6 +20,9 @@ type Config struct {
 	APIKey                string `yaml:"spyderbat_secret_api_key"`
 	LocalSyslogForwarding bool   `yaml:"local_syslog_forwarding"`
 	StdOut                bool   `yaml:"stdout"`
+	FilterExpression      string `yaml:"matching_filter" default:""`
+	Linkback              bool   `yaml:"linkback"`
+	UIUrl                 string `yaml:"ui_url"`
 }
 
 // configItem validation

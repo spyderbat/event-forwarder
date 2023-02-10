@@ -23,3 +23,7 @@ data:
       log_path: /opt/local/spyderbat/var/log
 
       stdout: true
+
+      matching_filter: {{ .Values.spyderbat.matching_filter }}
+      linkback: true
+      ui_url: {{ .Values.spyderbat.ui_url }}

@@ -9,12 +9,15 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
 	"log/syslog"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -143,7 +146,15 @@ func main() {
 	if cfg.StdOut {
 		logWriters = append(logWriters, os.Stdout)
 	}
-
+	var filter = false
+	var reg *regexp.Regexp
+	if cfg.FilterExpression != "" {
+		filter = true
+		reg, err = regexp.Compile(cfg.FilterExpression)
+		if err != nil {
+			panic(err)
+		}
+	}
 	if cfg.LocalSyslogForwarding {
 		w, err := syslog.Dial("", "", syslog.LOG_ALERT, "spyderbat-event")
 		if err != nil {
@@ -245,7 +256,18 @@ func main() {
 			// Results should always be JSON. Log non-JSON records separately.
 			err = fastjson.ValidateBytes(record)
 			if err == nil {
-				eventLog.Print(string(record))
+				var s = string(record)
+				if filter && reg.MatchString(s) {
+					if cfg.Linkback {
+						muid := fastjson.GetString(record, "muid")
+						id := fastjson.GetString(record, "id")
+						d := fmt.Sprintf("\"%v/app/org/%v/source/%v/spyder-console?ids=%v\"", cfg.UIUrl, cfg.OrgUID, muid, url.QueryEscape(id))
+						record = append(append((record)[:len(record)-1], append([]byte(`,"linkback":`), d...)...), '}')
+					}
+					eventLog.Print(string(record))
+				} else if !filter {
+					eventLog.Print(string(record))
+				}
 			} else {
 				log.Printf("invalid record: %s", r)
 			}
@@ -254,7 +276,9 @@ func main() {
 		if err := scanner.Err(); err != nil {
 			log.Printf("error processing records: %s", err)
 		}
-
-		log.Printf("%d new records, most recent %v ago", newRecords, et.Sub(lastTime.Time()).Round(time.Second))
+		if !cfg.StdOut {
+			// only stdout events
+			log.Printf("%d new records, most recent %v ago", newRecords, et.Sub(lastTime.Time()).Round(time.Second))
+		}
 	}
 }

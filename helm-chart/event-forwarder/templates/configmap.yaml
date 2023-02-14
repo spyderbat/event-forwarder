@@ -24,6 +24,8 @@ data:
 
       stdout: true
 
-      matching_filter: {{ .Values.spyderbat.matching_filter }}
+      matching_filters:{{- range .Values.spyderbat.matching_filters }}
+        - {{.}}{{- end }}
+      
       linkback: {{ .Values.spyderbat.linkback }}
       ui_url: {{ .Values.spyderbat.ui_url }}

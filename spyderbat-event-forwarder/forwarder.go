@@ -147,12 +147,15 @@ func main() {
 		logWriters = append(logWriters, os.Stdout)
 	}
 	var filter = false
-	var reg *regexp.Regexp
-	if cfg.FilterExpression != "" {
+	var reg []*regexp.Regexp
+	if len(cfg.FilterExpression) > 0 {
 		filter = true
-		reg, err = regexp.Compile(cfg.FilterExpression)
-		if err != nil {
-			panic(err)
+		for i := 0; i < len(cfg.FilterExpression); i++ {
+			regex, err := regexp.Compile(cfg.FilterExpression[i])
+			if err != nil {
+				panic(err)
+			}
+			reg = append(reg, regex)
 		}
 	}
 	if cfg.LocalSyslogForwarding {
@@ -257,14 +260,18 @@ func main() {
 			err = fastjson.ValidateBytes(record)
 			if err == nil {
 				var s = string(record)
-				if filter && reg.MatchString(s) {
-					if cfg.Linkback {
-						muid := fastjson.GetString(record, "muid")
-						id := fastjson.GetString(record, "id")
-						d := fmt.Sprintf("\"%v/app/org/%v/source/%v/spyder-console?ids=%v\"", cfg.UIUrl, cfg.OrgUID, muid, url.QueryEscape(id))
-						record = append(append((record)[:len(record)-1], append([]byte(`,"linkback":`), d...)...), '}')
+				if filter {
+					for i := 0; i < len(reg); i++ {
+						if reg[i].MatchString(s) {
+							if cfg.Linkback {
+								muid := fastjson.GetString(record, "muid")
+								id := fastjson.GetString(record, "id")
+								d := fmt.Sprintf("\"%v/app/org/%v/source/%v/spyder-console?ids=%v\"", cfg.UIUrl, cfg.OrgUID, muid, url.QueryEscape(id))
+								record = append(append((record)[:len(record)-1], append([]byte(`,"linkback":`), d...)...), '}')
+							}
+							eventLog.Print(string(record))
+						}
 					}
-					eventLog.Print(string(record))
 				} else if !filter {
 					eventLog.Print(string(record))
 				}

@@ -2,6 +2,8 @@
 
 ## Quickstart
 ```
+git clone https://github.com/spyderbat/event-forwarder.git
+cd event-forwarder/helm-chart/event-forwarder
 helm install <release-name> . --namespace spyderbat --set spyderbat.spyderbat_org_uid=<ORG_ID> --set spyderbat.spyderbat_secret_api_key=<API_KEY> --create-namespace
 ```
 
@@ -14,3 +16,6 @@ helm install <release-name> . --namespace spyderbat --set spyderbat.spyderbat_or
 |spyderbat.api_host | api host to use | api.prod.spyderbat.com|N
 |namespace| namespace to install to| spyderbat|N
 |persistence.storageClass | pvc storageClass | default|N
+|spyderbat.matching_filters | only write out events that match these regex filters (json/yaml array of strings syntax)|.*|N
+|spyderbat.linkback | attempt to append a linkback to the spyderbat console for easy access |false |N 
+|spyderbat.ui_url| ui url to use to generate linkback | "https://app.spyderbat.com" | N

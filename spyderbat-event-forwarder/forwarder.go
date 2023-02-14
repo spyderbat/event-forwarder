@@ -273,6 +273,12 @@ func main() {
 						}
 					}
 				} else if !filter {
+					if cfg.Linkback {
+						muid := fastjson.GetString(record, "muid")
+						id := fastjson.GetString(record, "id")
+						d := fmt.Sprintf("\"%v/app/org/%v/source/%v/spyder-console?ids=%v\"", cfg.UIUrl, cfg.OrgUID, muid, url.QueryEscape(id))
+						record = append(append((record)[:len(record)-1], append([]byte(`,"linkback":`), d...)...), '}')
+					}
 					eventLog.Print(string(record))
 				}
 			} else {

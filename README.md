@@ -8,6 +8,11 @@ The event forwarder is a small utility that consumes Spyderbat events from the A
 - x86_64 or arm64 processor
 - systemd
 
+## Helm Installation
+```
+cd helm-chart/event-forwarder
+helm install sb-forwarder . --set spyderbat.spyderbat_org_uid=<org uid from console> --set spyderbat.spyderbat_secret_api_key=<api key from console> --namespace spyderbat --create-namespace
+```
 ## Installation
 
 Download the [latest release](https://github.com/spyderbat/event-forwarder/releases).

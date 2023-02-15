@@ -112,6 +112,13 @@ func printVersion() {
 	log.Printf("starting spyderbat-event-forwarder (commit %s%s; %s; %s; %s)", vcsrevision, vcsdirty, vcstime, version, runtime.GOARCH)
 }
 
+func addLinkback(record []byte, cfg *config.Config) []byte {
+	muid := fastjson.GetString(record, "muid")
+	id := fastjson.GetString(record, "id")
+	d := fmt.Sprintf("\"%v/app/org/%v/source/%v/spyder-console?ids=%v\"", cfg.UIUrl, cfg.OrgUID, muid, url.QueryEscape(id))
+	record = append(append((record)[:len(record)-1], append([]byte(`,"linkback":`), d...)...), '}')
+	return record
+}
 func main() {
 
 	log.SetFlags(0)
@@ -263,21 +270,15 @@ func main() {
 				if filter {
 					for i := 0; i < len(reg); i++ {
 						if reg[i].MatchString(s) {
-							if cfg.Linkback {
-								muid := fastjson.GetString(record, "muid")
-								id := fastjson.GetString(record, "id")
-								d := fmt.Sprintf("\"%v/app/org/%v/source/%v/spyder-console?ids=%v\"", cfg.UIUrl, cfg.OrgUID, muid, url.QueryEscape(id))
-								record = append(append((record)[:len(record)-1], append([]byte(`,"linkback":`), d...)...), '}')
+							if cfg.Linkback || fastjson.GetString(record, "linkback") != "" {
+								record = addLinkback(record, cfg)
 							}
 							eventLog.Print(string(record))
 						}
 					}
 				} else if !filter {
-					if cfg.Linkback {
-						muid := fastjson.GetString(record, "muid")
-						id := fastjson.GetString(record, "id")
-						d := fmt.Sprintf("\"%v/app/org/%v/source/%v/spyder-console?ids=%v\"", cfg.UIUrl, cfg.OrgUID, muid, url.QueryEscape(id))
-						record = append(append((record)[:len(record)-1], append([]byte(`,"linkback":`), d...)...), '}')
+					if cfg.Linkback || fastjson.GetString(record, "linkback") != "" {
+						record = addLinkback(record, cfg)
 					}
 					eventLog.Print(string(record))
 				}

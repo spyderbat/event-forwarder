@@ -25,7 +25,7 @@ spec:
         name: config
       - name: persistent-storage
         persistentVolumeClaim:
-          claimName: {{ include "event-forwarder.fullname" . }}-pvc
+          claimName: {{ include "event-forwarder.fullname" . }}-pv
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:

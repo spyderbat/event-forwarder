@@ -24,8 +24,9 @@ spec:
           name: {{ include "event-forwarder.fullname" . }}
         name: config
       - name: persistent-storage
-        persistentVolumeClaim:
-          claimName: {{ include "event-forwarder.fullname" . }}-pv
+        hostPath:
+          path: "/opt/local/spyderbat/var/log"
+          type: DirectoryOrCreate
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:

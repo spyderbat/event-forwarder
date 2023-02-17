@@ -15,7 +15,7 @@ podSecurityContext: {}
   # fsGroup: 2000
 
 securityContext:
-  runAsUser: 0
+  runAsUser: 0 # we currently use a hostPath as our state file.  This will move to something more robust as needed.
   # capabilities:
   #   drop:
   #   - ALL

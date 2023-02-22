@@ -9,12 +9,15 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
 	"log/syslog"
+	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -109,6 +112,13 @@ func printVersion() {
 	log.Printf("starting spyderbat-event-forwarder (commit %s%s; %s; %s; %s)", vcsrevision, vcsdirty, vcstime, version, runtime.GOARCH)
 }
 
+func addLinkback(record []byte, cfg *config.Config) []byte {
+	muid := fastjson.GetString(record, "muid")
+	id := fastjson.GetString(record, "id")
+	d := fmt.Sprintf("\"%v/app/org/%v/source/%v/spyder-console?ids=%v\"", cfg.UIUrl, cfg.OrgUID, muid, url.QueryEscape(id))
+	record = append(append((record)[:len(record)-1], append([]byte(`,"linkback":`), d...)...), '}')
+	return record
+}
 func main() {
 
 	log.SetFlags(0)
@@ -140,6 +150,21 @@ func main() {
 		},
 	}
 
+	if cfg.StdOut {
+		logWriters = append(logWriters, os.Stdout)
+	}
+	var filter = false
+	var reg []*regexp.Regexp
+	if len(cfg.FilterExpression) > 0 {
+		filter = true
+		for i := 0; i < len(cfg.FilterExpression); i++ {
+			regex, err := regexp.Compile(cfg.FilterExpression[i])
+			if err != nil {
+				panic(err)
+			}
+			reg = append(reg, regex)
+		}
+	}
 	if cfg.LocalSyslogForwarding {
 		w, err := syslog.Dial("", "", syslog.LOG_ALERT, "spyderbat-event")
 		if err != nil {
@@ -241,7 +266,22 @@ func main() {
 			// Results should always be JSON. Log non-JSON records separately.
 			err = fastjson.ValidateBytes(record)
 			if err == nil {
-				eventLog.Print(string(record))
+				var s = string(record)
+				if filter {
+					for i := 0; i < len(reg); i++ {
+						if reg[i].MatchString(s) {
+							if cfg.Linkback || fastjson.GetString(record, "linkback") != "" {
+								record = addLinkback(record, cfg)
+							}
+							eventLog.Print(string(record))
+						}
+					}
+				} else if !filter {
+					if cfg.Linkback || fastjson.GetString(record, "linkback") != "" {
+						record = addLinkback(record, cfg)
+					}
+					eventLog.Print(string(record))
+				}
 			} else {
 				log.Printf("invalid record: %s", r)
 			}
@@ -250,7 +290,9 @@ func main() {
 		if err := scanner.Err(); err != nil {
 			log.Printf("error processing records: %s", err)
 		}
-
-		log.Printf("%d new records, most recent %v ago", newRecords, et.Sub(lastTime.Time()).Round(time.Second))
+		if !cfg.StdOut {
+			// only stdout events
+			log.Printf("%d new records, most recent %v ago", newRecords, et.Sub(lastTime.Time()).Round(time.Second))
+		}
 	}
 }

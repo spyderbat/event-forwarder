@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "event-forwarder.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "event-forwarder.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "event-forwarder.fullname" . }}
+  selector:
+    matchLabels:
+      {{- include "event-forwarder.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "event-forwarder.selectorLabels" . | nindent 8 }}
+    spec:
+      volumes:
+      - configMap:
+          name: {{ include "event-forwarder.fullname" . }}
+        name: config
+      - name: persistent-storage
+        hostPath:
+          path: "/opt/local/spyderbat/var/log"
+          type: DirectoryOrCreate
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+          - name: config
+            mountPath: /opt/local/spyderbat/config.yaml
+            subPath: config.yaml
+            readOnly: true
+          - mountPath: /opt/local/spyderbat/var/log
+            name: persistent-storage
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

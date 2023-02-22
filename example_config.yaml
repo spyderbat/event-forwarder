@@ -15,3 +15,6 @@ log_path: /opt/spyderbat-events/var/log
 # NOTE: This is not required for Splunk integration.
 # local_syslog_forwarding: true
 
+
+# optionally enable stdout logging -- useful in k8s and containers
+#stdout: true

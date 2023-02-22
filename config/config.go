@@ -14,11 +14,15 @@ const (
 )
 
 type Config struct {
-	APIHost               string `yaml:"api_host"`
-	LogPath               string `yaml:"log_path"`
-	OrgUID                string `yaml:"spyderbat_org_uid"`
-	APIKey                string `yaml:"spyderbat_secret_api_key"`
-	LocalSyslogForwarding bool   `yaml:"local_syslog_forwarding"`
+	APIHost               string   `yaml:"api_host"`
+	LogPath               string   `yaml:"log_path"`
+	OrgUID                string   `yaml:"spyderbat_org_uid"`
+	APIKey                string   `yaml:"spyderbat_secret_api_key"`
+	LocalSyslogForwarding bool     `yaml:"local_syslog_forwarding"`
+	StdOut                bool     `yaml:"stdout"`
+	FilterExpression      []string `yaml:"matching_filters"`
+	Linkback              bool     `yaml:"linkback"`
+	UIUrl                 string   `yaml:"ui_url"`
 }
 
 // configItem validation

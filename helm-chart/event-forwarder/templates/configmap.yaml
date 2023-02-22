@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "event-forwarder.fullname" . }}
+  namespace: {{ .Release.Namespace}}
+  labels:
+    app: {{ template "event-forwarder.fullname" . }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: "{{ .Release.Name }}"
+    heritage: "{{ .Release.Service }}"
+data:
+    config.yaml: |-
+      # your spyderbat org UID goes here
+      spyderbat_org_uid: {{ .Values.spyderbat.spyderbat_org_uid }}
+
+      # your spyderbat API key goes here
+      spyderbat_secret_api_key: {{ .Values.spyderbat.spyderbat_secret_api_key }}
+
+      # optionally override the API endpoint (used for testing)
+      api_host: {{ .Values.spyderbat.api_host }}
+
+      # specify the location to write logs and keep state
+      log_path: /opt/local/spyderbat/var/log
+
+      stdout: true
+
+      matching_filters:{{- range .Values.spyderbat.matching_filters }}
+        - {{.}}{{- end }}
+      
+      linkback: {{ .Values.spyderbat.linkback }}
+      ui_url: {{ .Values.spyderbat.ui_url }}

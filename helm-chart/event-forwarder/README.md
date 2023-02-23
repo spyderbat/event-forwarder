@@ -29,7 +29,7 @@ helm install <release-name> . --namespace spyderbat --set spyderbat.spyderbat_or
 ```
 kubectl logs statefulset.apps/sb-forwarder-event-forwarder -n spyderbat
 ```
-### You should see something like the below at the top of the logs followed by any/all events in your org (possibly filtered if using matching filters)
+### You should see something like the below at the top of the logs followed by any/all events in your org (possibly filtered if using matching filters) in ndjson format
 ```
  tarting spyderbat-event-forwarder (commit unknown; unknown; go1.18.10; amd64)
 loading config from ./config.yaml

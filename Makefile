@@ -20,3 +20,4 @@ clean:
 updatecontainer:
 	aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/a6j2k0g1
 	docker buildx build --platform=linux/amd64,linux/arm64 --push -t public.ecr.aws/a6j2k0g1/event-forwarder:latest .
+

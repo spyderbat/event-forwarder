@@ -1,5 +1,5 @@
 // Spyderbat Event Forwarder
-// Copyright (C) 2022 Spyderbat, Inc.
+// Copyright (C) 2022-2023 Spyderbat, Inc.
 // Use according to license terms.
 
 package main
@@ -119,6 +119,7 @@ func addLinkback(record []byte, cfg *config.Config) []byte {
 	record = append(append((record)[:len(record)-1], append([]byte(`,"linkback":`), d...)...), '}')
 	return record
 }
+
 func main() {
 
 	log.SetFlags(0)
@@ -135,6 +136,15 @@ func main() {
 	log.Printf("api host: %s", cfg.APIHost)
 	log.Printf("log path: %s", cfg.LogPath)
 	log.Printf("local syslog forwarding: %v", cfg.LocalSyslogForwarding)
+	if v, exists := os.LookupEnv("HTTP_PROXY"); exists {
+		log.Printf("http proxy: %s", v)
+	}
+	if v, exists := os.LookupEnv("HTTPS_PROXY"); exists {
+		log.Printf("https proxy: %s", v)
+	}
+	if v, exists := os.LookupEnv("NO_PROXY"); exists {
+		log.Printf("no proxy: %s", v)
+	}
 
 	lastTime, err := loadState(cfg.LogPath)
 	if err != nil {

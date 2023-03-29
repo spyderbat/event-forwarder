@@ -6,11 +6,12 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"spyderbat-event-forwarder/config"
 
-	"github.com/puzpuzpuz/xsync"
+	"github.com/puzpuzpuz/xsync/v2"
 )
 
 const urlBase = "/api/v1/org/"
@@ -21,6 +22,34 @@ type APIError struct {
 	Ctx        string
 	Expiration string
 	ServerTime string
+	Server     string
+}
+
+func newAPIError(resp *http.Response) *APIError {
+	return &APIError{
+		StatusCode: resp.StatusCode,
+		Status:     resp.Status,
+		Ctx:        getHeader(resp, "X-Context-Uid"),
+		Expiration: getHeader(resp, "X-Jwt-Expiration"),
+		ServerTime: getHeader(resp, "X-Server-Time"),
+		Server:     getHeader(resp, "Server"),
+	}
+}
+
+// The API server does not currently use canonicalized HTTP headers, so we need to do a case-insensitive
+// search for the header we want.
+func getHeader(resp *http.Response, key string) string {
+	if resp == nil {
+		return ""
+	}
+
+	for k, v := range resp.Header {
+		if strings.EqualFold(k, key) && len(v) > 0 {
+			return v[0]
+		}
+	}
+
+	return ""
 }
 
 func (e *APIError) Error() string {
@@ -35,7 +64,10 @@ func (e *APIError) Error() string {
 		msg = fmt.Sprintf("%s; server time %s", msg, e.ServerTime)
 	}
 	if e.StatusCode == http.StatusForbidden || e.StatusCode == http.StatusUnauthorized {
-		msg = fmt.Sprintf("%s; check your host clock, your org uid, and your api key.", msg)
+		msg = fmt.Sprintf("%s; check your host clock, your org uid, and your api key", msg)
+	}
+	if len(e.Server) > 0 {
+		msg = fmt.Sprintf("%s; server %s", msg, e.Server)
 	}
 	return msg
 }
@@ -43,7 +75,7 @@ func (e *APIError) Error() string {
 type API struct {
 	config *config.Config
 	client *http.Client
-	muid   *xsync.MapOf[RuntimeDetails]
+	muid   *xsync.MapOf[string, RuntimeDetails]
 }
 
 func New(c *config.Config) *API {
@@ -85,13 +117,7 @@ func (a *API) SourceQuery(ctx context.Context) (io.ReadCloser, error) {
 
 	resp.Body.Close()
 
-	return nil, &APIError{
-		Status:     resp.Status,
-		StatusCode: resp.StatusCode,
-		Ctx:        resp.Header.Get("X-Context-Uid"),
-		Expiration: resp.Header.Get("X-Jwt-Expiration"),
-		ServerTime: resp.Header.Get("X-Server-Time"),
-	}
+	return nil, newAPIError(resp)
 }
 
 // SourceDataQuery queries the API for events within a time range
@@ -115,11 +141,5 @@ func (a *API) SourceDataQuery(ctx context.Context, st time.Time, et time.Time) (
 
 	resp.Body.Close()
 
-	return nil, &APIError{
-		Status:     resp.Status,
-		StatusCode: resp.StatusCode,
-		Ctx:        resp.Header.Get("X-Context-Uid"),
-		Expiration: resp.Header.Get("X-Jwt-Expiration"),
-		ServerTime: resp.Header.Get("X-Server-Time"),
-	}
+	return nil, newAPIError(resp)
 }

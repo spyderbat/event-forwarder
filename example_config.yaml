@@ -1,20 +1,61 @@
-# your spyderbat org UID goes here
+# Your spyderbat org UID goes here
 spyderbat_org_uid: your_org_uid
 
-# your spyderbat API key goes here
+# Your spyderbat API key goes here
 spyderbat_secret_api_key: your_api_key
 
-# optionally override the API endpoint (used for testing)
+# Optionally override the API endpoint (non-US regions only)
 api_host:
 
-# specify the location to write logs and keep state
+# Specify the location to write logs and keep state
 log_path: /opt/spyderbat-events/var/log
 
-# optionally enable forwarding to the host's syslog daemon for forwarding or collection by other agents
+# Optionally enable forwarding to the host's syslog daemon for forwarding or collection by other agents
 # NOTE: This is not recommended if syslog messages are forwarded over unencrypted channels to other hosts.
 # NOTE: This is not required for Splunk integration.
 # local_syslog_forwarding: true
 
+# Optionally filter events using an expression syntax.
+# The expression must evaluate to a bool; If it is true, the event
+# will be logged.
+#
+# The expression syntax is documented here:
+#          https://expr.medv.io/docs/Language-Definition
+#
+# If the expression fails to compile, the event forwarder will exit
+# with an error at startup.
+#
+# If the expression fails to evaluate, the event will be logged and the
+# forwarder will continue. The most common reason for an expression to
+# fail to evaluate is that the event does not contain the field(s)
+# referenced in the expression. To avoid this problem, check that the
+# fields you are referencing are not nil, or use the short-circuit "??"
+# operator. Schema is guaranteed to be present.
+#
+# Here is an example:
+#
+# expr: |
+#         (
+#             schema startsWith "model_spydertrace:"
+#             and
+#             (score ?? 0) > 1000
+#         )
+#         or
+#         (
+#             not
+#             (
+#                 schema startsWith "model_spydertrace:"
+#                 or
+#                 schema startsWith "event_redflag:bogons:"
+#                 or
+#                 (severity ?? "") in ["info", "low", "medium"]
+#             )
+#         )
+#
+# This expression will log all events with a schema starting with
+# "model_spydertrace:" and a score greater than 1000. It will log
+# everything else except events with a schema starting with
+# "event_redflag:bogons:" or a severity of "low" or "medium".
 
-# optionally enable stdout logging -- useful in k8s and containers
+# Optionally enable stdout logging -- useful in k8s and containers
 #stdout: true

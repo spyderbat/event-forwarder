@@ -7,17 +7,14 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"flag"
-	"fmt"
 	"io"
 	"io/fs"
 	"log"
 	"log/syslog"
-	"net/url"
+	"net"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -27,10 +24,15 @@ import (
 	"spyderbat-event-forwarder/config"
 	"spyderbat-event-forwarder/record"
 
+	"github.com/antonmedv/expr/vm"
 	"github.com/golang/groupcache/lru"
-	"github.com/valyala/fastjson"
-	"golang.org/x/crypto/blake2b"
+	jsoniter "github.com/json-iterator/go"
 	"gopkg.in/natefinch/lumberjack.v2"
+)
+
+var (
+	json   = jsoniter.ConfigCompatibleWithStandardLibrary
+	exprVM = vm.VM{} // exprVM is reused on each request
 )
 
 const (
@@ -48,10 +50,9 @@ var lruCache = lru.New(dedupCacheElements)
 // loadState seeds the LRU from events already written to disk. It returns the most recent event time.
 func loadState(LogPath string) (record.RecordTime, error) {
 	lastTime := record.RecordTime(0)
-	record := new(record.Record)
 	LogPath = filepath.Clean(LogPath)
 	err := filepath.WalkDir(LogPath, func(path string, d fs.DirEntry, err error) error {
-		if d.Type().IsDir() && d.Name() != LogPath {
+		if d.Type().IsDir() && filepath.Dir(path) != filepath.Dir(LogPath) { // skip subdirs (except the root)
 			return fs.SkipDir // don't descend into subdirs
 		}
 		if err != nil {
@@ -59,25 +60,27 @@ func loadState(LogPath string) (record.RecordTime, error) {
 		}
 		name := d.Name()
 		if d.Type().IsRegular() && strings.HasPrefix(name, "spyderbat_events") && strings.HasSuffix(name, ".log") {
-			f, err := os.Open(name)
+			f, err := os.Open(path)
 			if err != nil {
 				return err
 			}
-			log.Printf("loading %s", name)
 			defer f.Close()
+			cached := 0
 			scanner := bufio.NewScanner(f)
 			for scanner.Scan() {
 				b := scanner.Bytes()
-				if json.Unmarshal(b, record) == nil {
-					if record.Time > lastTime {
-						lastTime = record.Time
+				if id, t, err := record.SummaryFromJSON(b); err == nil {
+					if t > lastTime {
+						lastTime = t
 					}
+					lruCache.Add(id, nil)
+					cached++
 				}
-				lruCache.Add(blake2b.Sum256(b), nil)
 			}
 			if scanner.Err() != nil {
 				return scanner.Err()
 			}
+			log.Printf("loaded %d IDs from %s", cached, path)
 		}
 		return nil
 	})
@@ -88,7 +91,7 @@ func loadState(LogPath string) (record.RecordTime, error) {
 }
 
 func printVersion() {
-	vcsrevision := "unknown"
+	vcsrevision := ""
 	vcsdirty := ""
 	vcstime := "unknown"
 	version := "go1.x"
@@ -109,20 +112,51 @@ func printVersion() {
 		version = info.GoVersion
 	}
 
+	if len(vcsrevision) < 7 {
+		vcsrevision = "unknown"
+	}
+
+	vcsrevision = vcsrevision[:7] // short hash
+
 	log.Printf("starting spyderbat-event-forwarder (commit %s%s; %s; %s; %s)", vcsrevision, vcsdirty, vcstime, version, runtime.GOARCH)
 }
 
-func addLinkback(record []byte, cfg *config.Config) []byte {
-	muid := fastjson.GetString(record, "muid")
-	id := fastjson.GetString(record, "id")
-	d := fmt.Sprintf("\"%v/app/org/%v/source/%v/spyder-console?ids=%v\"", cfg.UIUrl, cfg.OrgUID, muid, url.QueryEscape(id))
-	record = append(append((record)[:len(record)-1], append([]byte(`,"linkback":`), d...)...), '}')
-	return record
+func getUserAgent() string {
+	vcsrevision := ""
+	vcsdirty := ""
+
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, v := range info.Settings {
+			switch v.Key {
+			case "vcs.revision":
+				vcsrevision = v.Value
+			case "vcs.modified":
+				if v.Value == "true" {
+					vcsdirty = "+dirty"
+				}
+			}
+		}
+	}
+
+	if len(vcsrevision) < 7 {
+		vcsrevision = "unknown"
+	}
+
+	// the short hash is 7 characters, which also works with "unknown"
+	return "sef/" + vcsrevision[:7] + vcsdirty
+}
+
+// pedantically use the same logic as the go runtime to get the proxy settings
+func getEnvAny(names ...string) string {
+	for _, n := range names {
+		if val := os.Getenv(n); val != "" {
+			return val
+		}
+	}
+	return ""
 }
 
 func main() {
-
-	log.SetFlags(0)
 	configPath := flag.String("c", "config.yaml", "path to config file")
 	flag.Parse()
 
@@ -136,14 +170,32 @@ func main() {
 	log.Printf("api host: %s", cfg.APIHost)
 	log.Printf("log path: %s", cfg.LogPath)
 	log.Printf("local syslog forwarding: %v", cfg.LocalSyslogForwarding)
-	if v, exists := os.LookupEnv("HTTP_PROXY"); exists {
+
+	if v := getEnvAny("HTTP_PROXY", "http_proxy"); v != "" {
 		log.Printf("http proxy: %s", v)
 	}
-	if v, exists := os.LookupEnv("HTTPS_PROXY"); exists {
+	if v := getEnvAny("HTTPS_PROXY", "https_proxy"); v != "" {
 		log.Printf("https proxy: %s", v)
 	}
-	if v, exists := os.LookupEnv("NO_PROXY"); exists {
+	if v := getEnvAny("NO_PROXY", "no_proxy"); v != "" {
 		log.Printf("no proxy: %s", v)
+	}
+
+	// resolve the API host to an IP address, just to verify DNS works
+	addr, err := net.ResolveIPAddr("ip", cfg.APIHost)
+	if err != nil {
+		log.Printf("WARNING: dns check failed, unable to resolve %s: %s", cfg.APIHost, err)
+		// not necessarily fatal if a proxy is involved
+	} else {
+		log.Printf("dns check successful: %s -> %s", cfg.APIHost, addr)
+	}
+
+	sapi := api.New(cfg, getUserAgent())
+	err = sapi.ValidateAPIReachability(context.Background())
+	if err != nil {
+		log.Fatalf("fatal: unable to reach API server: %s", err)
+	} else {
+		log.Printf("api server reachable")
 	}
 
 	lastTime, err := loadState(cfg.LogPath)
@@ -163,18 +215,7 @@ func main() {
 	if cfg.StdOut {
 		logWriters = append(logWriters, os.Stdout)
 	}
-	var filter = false
-	var reg []*regexp.Regexp
-	if len(cfg.FilterExpression) > 0 {
-		filter = true
-		for i := 0; i < len(cfg.FilterExpression); i++ {
-			regex, err := regexp.Compile(cfg.FilterExpression[i])
-			if err != nil {
-				panic(err)
-			}
-			reg = append(reg, regex)
-		}
-	}
+
 	if cfg.LocalSyslogForwarding {
 		w, err := syslog.Dial("", "", syslog.LOG_ALERT, "spyderbat-event")
 		if err != nil {
@@ -183,10 +224,6 @@ func main() {
 			logWriters = append(logWriters, w)
 		}
 	}
-
-	eventLog := log.New(io.MultiWriter(logWriters...), "", 0)
-
-	sapi := api.New(cfg)
 
 	_ = sapi.RefreshSources(context.TODO())
 	go func() {
@@ -202,13 +239,23 @@ func main() {
 		}
 	}()
 
-	// struct to decode log time from json records
-	last := new(record.Record)
+	eventLog := log.New(io.MultiWriter(logWriters...), "", 0)
+
+	var last record.RecordTime
 
 	// initial state: query from an hour ago until now
 	st := time.Now().Add(-1 * time.Hour)
 
 	startingUp := true
+
+	req := &processLogsRequest{
+		sapi:     sapi,
+		eventLog: eventLog,
+		last:     last,
+		stats:    new(logstats),
+		lastTime: lastTime,
+		cfg:      cfg,
+	}
 
 	for {
 		if !startingUp {
@@ -244,65 +291,18 @@ func main() {
 			continue
 		}
 
-		scanner := bufio.NewScanner(r)
-		recordsRetrieved := 0
-		newRecords := 0
+		req.r = r
 
-		for scanner.Scan() {
-			recordsRetrieved++
-			record := scanner.Bytes()
-			sum := blake2b.Sum256(record)
-			if _, exists := lruCache.Get(sum); exists {
-				continue // skip duplicates
-			} else {
-				newRecords++
-				lruCache.Add(sum, nil)
-			}
-
-			err := json.Unmarshal(record, last)
-			if err != nil {
-				continue
-			}
-
-			if last.Time > lastTime {
-				lastTime = last.Time
-			}
-
-			// Augment the record with runtime_details from the muid.
-			// This is harmless in the rare case we pass non-JSON, since we
-			// perform JSON validation next.
-			sapi.AugmentRuntimeDetailsJSON(&record)
-
-			// Results should always be JSON. Log non-JSON records separately.
-			err = fastjson.ValidateBytes(record)
-			if err == nil {
-				var s = string(record)
-				if filter {
-					for i := 0; i < len(reg); i++ {
-						if reg[i].MatchString(s) {
-							if cfg.Linkback || fastjson.GetString(record, "linkback") != "" {
-								record = addLinkback(record, cfg)
-							}
-							eventLog.Print(string(record))
-						}
-					}
-				} else if !filter {
-					if cfg.Linkback || fastjson.GetString(record, "linkback") != "" {
-						record = addLinkback(record, cfg)
-					}
-					eventLog.Print(string(record))
-				}
-			} else {
-				log.Printf("invalid record: %s", r)
-			}
+		err = processLogs(req)
+		if err != nil {
+			log.Printf("error processing logs: %v", err)
 		}
-		r.Close()
-		if err := scanner.Err(); err != nil {
-			log.Printf("error processing records: %s", err)
-		}
-		if !cfg.StdOut {
-			// only stdout events
-			log.Printf("%d new records, most recent %v ago", newRecords, et.Sub(lastTime.Time()).Round(time.Second))
-		}
+
+		log.Printf("%d new records (%d invalid, %d logged, %d filtered), most recent %v ago",
+			req.stats.newRecords,
+			req.stats.invalidRecords,
+			req.stats.loggedRecords,
+			req.stats.filteredRecords,
+			et.Sub(req.stats.last.Time()).Round(time.Second))
 	}
 }

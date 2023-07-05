@@ -16,16 +16,21 @@ data:
       # your spyderbat API key goes here
       spyderbat_secret_api_key: {{ .Values.spyderbat.spyderbat_secret_api_key }}
 
-      # optionally override the API endpoint (used for testing)
+      {{ if .Values.spyderbat.api_host }}
+      # override the API endpoint (non-US regions only)
       api_host: {{ .Values.spyderbat.api_host }}
 
+      {{ end }}
       # specify the location to write logs and keep state
       log_path: /opt/local/spyderbat/var/log
 
       stdout: true
 
-      matching_filters:{{- range .Values.spyderbat.matching_filters }}
+      {{ if .Values.spyderbat.matching_filters }}
+      matching_filters: {{- range .Values.spyderbat.matching_filters }}
         - {{.}}{{- end }}
       
-      linkback: {{ .Values.spyderbat.linkback }}
-      ui_url: {{ .Values.spyderbat.ui_url }}
+      {{ end }}
+      {{ if .Values.spyderbat.expr }}
+      expr: |{{ .Values.spyderbat.expr | nindent 8 }}
+      {{ end }}

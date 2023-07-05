@@ -18,9 +18,9 @@ helm install <release-name> . --namespace spyderbat --set spyderbat.spyderbat_or
 |spyderbat.api_host | api host to use | api.prod.spyderbat.com|N
 |namespace| namespace to install to| spyderbat|N
 |spyderbat.matching_filters | only write out events that match these regex filters (json/yaml array of strings syntax)|.*|N
-|spyderbat.linkback | attempt to append a linkback to the spyderbat console for easy access |false |N 
-|spyderbat.ui_url| ui url to use to generate linkback | "https://app.spyderbat.com" | N
+|spyderbat.expr | only write out events that match this expression | true |N
 
+_Note: matching_filters and expr cannot be combined. Use one or none._
 
 <br />
 
@@ -31,7 +31,7 @@ kubectl logs statefulset.apps/sb-forwarder-event-forwarder -n spyderbat
 ```
 ### You should see something like the below at the top of the logs followed by any/all events in your org (possibly filtered if using matching filters) in ndjson format
 ```
- tarting spyderbat-event-forwarder (commit unknown; unknown; go1.18.10; amd64)
+starting spyderbat-event-forwarder (commit 4f833d1b02da96fb9df39c38cc9be725e17967fb; 2023-03-29T16:59:19Z; go1.20.2; arm64)
 loading config from ./config.yaml
 org uid: spyderbatuid
 api host: api.kangaroobat.net

@@ -1,8 +1,8 @@
 config.yaml
 .DS_Store
 *.log
-spyderbat-event-forwarder
 spyderbat-event-forwarder.aarch64
 spyderbat-event-forwarder.x86_64
 *.tgz
 .vscode
+/values.yaml

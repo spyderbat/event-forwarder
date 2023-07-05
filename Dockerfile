@@ -1,13 +1,13 @@
 # syntax=docker/dockerfile:1
 
 ## Build
-FROM golang:1.18-buster AS build
+FROM golang:1.20 AS build
 
-WORKDIR /usr/local/go/src/github.com/spyderbat/event-forwarder
+# This cannot be in /usr/local/go or the vcs embedding breaks
+WORKDIR /tmp/event-forwarder
 
 COPY ./ ./
-RUN go mod tidy
-RUN CGO_ENABLED=1 go build -trimpath -ldflags "-s -w" -o /event-forwarder ./spyderbat-event-forwarder
+RUN go build -trimpath -ldflags "-s -w" -o /event-forwarder ./spyderbat-event-forwarder
 
 ## Deploy
 FROM debian:stable-slim

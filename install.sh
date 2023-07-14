@@ -19,10 +19,8 @@ mkdir -p ${INSTALL_HOME}/etc
 mkdir -p ${INSTALL_HOME}/var/log
 
 # Create the sbevents user/group if it does not exist
-id -u sbevents >/dev/null 2>/dev/null
-if [ "$?" != "0" ] ; then
+id -u sbevents >/dev/null 2>/dev/null ||
   useradd --system --home-dir ${INSTALL_HOME} --shell /bin/false sbevents
-fi
 
 # Fix directory ownership
 chgrp sbevents ${INSTALL_HOME}

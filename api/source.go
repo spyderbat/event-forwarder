@@ -1,3 +1,7 @@
+// Spyderbat Event Forwarder
+// Copyright (C) 2022-2023 Spyderbat, Inc.
+// Use according to license terms.
+
 package api
 
 import (
@@ -13,6 +17,7 @@ type RuntimeDetails struct {
 	IPAddresses     []string `json:"ip_addresses"`
 	MACAddresses    []string `json:"mac_addresses"`
 	Hostname        string   `json:"hostname"`
+	Forwarder       string   `json:"forwarder,omitempty"`
 }
 
 type Source struct {
@@ -22,28 +27,41 @@ type Source struct {
 
 // AugmentRuntimeDetailsJSON takes JSON input, extracts the muid if there is one,
 // and augments the JSON with runtime_details from the source, if available.
-func (a *API) AugmentRuntimeDetailsJSON(record *[]byte) {
-	if record == nil || len(*record) < 2 {
-		return
+func (a *API) AugmentRuntimeDetailsJSON(record []byte) []byte {
+	if len(record) < 2 {
+		return record
 	}
 
-	muid := fastjson.GetString(*record, "muid")
-	if muid == "" {
-		return
+	var details *RuntimeDetails
+
+	if muid := fastjson.GetString(record, "muid"); muid != "" {
+		if d, found := a.muid.Load(muid); found {
+			details = &d
+		}
 	}
 
-	details, found := a.muid.Load(muid)
-	if !found {
-		return
+	if details == nil {
+		details = &RuntimeDetails{}
 	}
+
+	details.Forwarder = a.useragent
 
 	d, err := json.Marshal(details)
 	if err != nil {
-		return
+		return record
 	}
 
 	// This is not pretty, but it avoids the cost of parsing the log record.
-	*record = append(append((*record)[:len(*record)-1], append([]byte(`,"runtime_details":`), d...)...), '}')
+	// We can't use append() anywhere, because we cannot modify the original record
+	// without corrupting the underlying scanner.
+	const key = `,"runtime_details":`
+	newlen := len(record) + len(key) + len(d)
+	newRecord := make([]byte, newlen)
+	copy(newRecord, record[:len(record)-1])
+	copy(newRecord[len(record)-1:], key)
+	copy(newRecord[len(record)-1+len(key):], d)
+	newRecord[len(newRecord)-1] = '}'
+	return newRecord
 }
 
 // RefreshSources queries all sources from the API and populates the runtime details into an

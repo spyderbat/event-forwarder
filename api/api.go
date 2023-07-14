@@ -73,27 +73,78 @@ func (e *APIError) Error() string {
 }
 
 type API struct {
-	config *config.Config
-	client *http.Client
-	muid   *xsync.MapOf[string, RuntimeDetails]
+	config    *config.Config
+	client    *http.Client
+	muid      *xsync.MapOf[string, RuntimeDetails]
+	useragent string
 }
 
-func New(c *config.Config) *API {
+type APIer interface {
+	AugmentRuntimeDetailsJSON(record []byte) []byte
+	RefreshSources(ctx context.Context) error
+}
+
+// uaTransport wraps http.Transport to set a User-Agent header
+type uaTransport struct {
+	http.Transport
+	UserAgent string
+}
+
+// RoundTrip wraps http.Transport.RoundTrip to set a User-Agent header
+func (t *uaTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if len(t.UserAgent) > 0 {
+		req.Header.Set("User-Agent", t.UserAgent)
+	}
+	return t.Transport.RoundTrip(req)
+}
+
+func New(c *config.Config, UserAgent string) *API {
 	return &API{config: c, client: &http.Client{
 		Timeout: 2 * time.Minute,
-		Transport: &http.Transport{
-			Dial: (&net.Dialer{
-				Timeout:   30 * time.Second,
-				KeepAlive: 30 * time.Second,
-			}).Dial,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-			DisableKeepAlives:     false,
-			DisableCompression:    false,
-			Proxy:                 http.ProxyFromEnvironment,
+		Transport: &uaTransport{
+			Transport: http.Transport{
+				Dial: (&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+				}).Dial,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+				DisableKeepAlives:     false,
+				DisableCompression:    false,
+				Proxy:                 http.ProxyFromEnvironment,
+			},
+			UserAgent: UserAgent,
 		}},
-		muid: xsync.NewMapOf[RuntimeDetails](),
+		muid:      xsync.NewMapOf[RuntimeDetails](),
+		useragent: UserAgent,
 	}
+}
+
+func (a *API) ValidateAPIReachability(ctx context.Context) error {
+	// GET /api/v1/org/{orgUID}
+	url := fmt.Sprintf("https://%s%s%s", a.config.APIHost, urlBase, a.config.OrgUID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Add("Accept", "application/json")
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	resp.Body.Close()
+
+	ae := newAPIError(resp)
+
+	// if we have a context id, we know the API is reachable
+	if len(ae.Ctx) > 0 {
+		return nil
+	}
+
+	// otherwise, return diagnostic information
+	return ae
 }
 
 // SourceQuery queries the API for sources

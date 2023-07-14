@@ -1,10 +1,17 @@
+// Spyderbat Event Forwarder
+// Copyright (C) 2022-2023 Spyderbat, Inc.
+// Use according to license terms.
+
 package config
 
 import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 
+	"github.com/antonmedv/expr"
+	"github.com/antonmedv/expr/vm"
 	"gopkg.in/yaml.v2"
 )
 
@@ -20,9 +27,19 @@ type Config struct {
 	APIKey                string   `yaml:"spyderbat_secret_api_key"`
 	LocalSyslogForwarding bool     `yaml:"local_syslog_forwarding"`
 	StdOut                bool     `yaml:"stdout"`
-	FilterExpression      []string `yaml:"matching_filters"`
-	Linkback              bool     `yaml:"linkback"`
-	UIUrl                 string   `yaml:"ui_url"`
+	MatchRegex            []string `yaml:"matching_filters"`
+	Expr                  string   `yaml:"expr"`
+
+	exprProgram *vm.Program
+	reg         []*regexp.Regexp
+}
+
+func (c *Config) GetExprProgram() *vm.Program {
+	return c.exprProgram
+}
+
+func (c *Config) GetRegexes() []*regexp.Regexp {
+	return c.reg
 }
 
 // configItem validation
@@ -50,11 +67,9 @@ func validateLogPath(c *configItem) error {
 	return os.Remove(f.Name())
 }
 
-// LoadConfig loads and parses a yaml config
-func LoadConfig(filename string) (*Config, error) {
-	log.Printf("loading config from %s", filename)
-	c := &Config{}
-
+// PrepareAndValidate validates the config and compiles expressions. It is called
+// automatically by LoadConfig, and provided here for testing.
+func (c *Config) PrepareAndValidate() error {
 	validation := []configItem{
 		{
 			Value:   &c.APIHost,
@@ -77,7 +92,55 @@ func LoadConfig(filename string) (*Config, error) {
 			Key:      "spyderbat_secret_api_key",
 			Required: true,
 		},
+		{
+			Value: &c.Expr,
+			Key:   "expr",
+			Validator: func(i *configItem) error {
+				if len(*i.Value) > 0 {
+					program, err := expr.Compile(*i.Value, expr.AsBool())
+					c.exprProgram = program
+					return err
+				} else {
+					return nil
+				}
+			},
+		},
 	}
+
+	for _, v := range validation {
+		if *v.Value == "" {
+			if v.Required {
+				return fmt.Errorf("no value for required config key '%s'", v.Key)
+			}
+			*v.Value = v.Default
+		}
+		if v.Validator != nil {
+			err := v.Validator(&v)
+			if err != nil {
+				return fmt.Errorf("failed to validate config key '%s': %w", v.Key, err)
+			}
+		}
+	}
+
+	if len(c.MatchRegex) > 0 && len(c.Expr) > 0 {
+		return fmt.Errorf("cannot use both 'expr' and 'matching_filters'")
+	}
+
+	for _, regex := range c.MatchRegex {
+		regex, err := regexp.Compile(regex)
+		if err != nil {
+			return fmt.Errorf("failed to compile regex '%s': %w", regex, err)
+		}
+		c.reg = append(c.reg, regex)
+	}
+
+	return nil
+}
+
+// LoadConfig loads and parses a yaml config
+func LoadConfig(filename string) (*Config, error) {
+	log.Printf("loading config from %s", filename)
+	c := &Config{}
 
 	d, err := os.ReadFile(filename)
 	if err != nil {
@@ -89,19 +152,9 @@ func LoadConfig(filename string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
-	for _, v := range validation {
-		if *v.Value == "" {
-			if v.Required {
-				return nil, fmt.Errorf("no value for required config key '%s' in %s", v.Key, filename)
-			}
-			*v.Value = v.Default
-		}
-		if v.Validator != nil {
-			err := v.Validator(&v)
-			if err != nil {
-				return nil, fmt.Errorf("failed to validate config key '%s': %w", v.Key, err)
-			}
-		}
+	err = c.PrepareAndValidate()
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate config: %w", err)
 	}
 
 	return c, nil

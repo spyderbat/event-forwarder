@@ -91,7 +91,7 @@ func TestProcessLogs(t *testing.T) {
 	setupLogging(t)
 	req, eventLogBuf := setupTestRequest(t)
 
-	err := processLogs(req)
+	err := processLogs(context.TODO(), req)
 	require.NoError(t, err)
 
 	// all records should be valid
@@ -106,7 +106,7 @@ func TestProcessLogs(t *testing.T) {
 	// processing the same file again should result in no new records (deduplication)
 	req, _ = setupTestRequest(t)
 	start := time.Now()
-	err = processLogs(req)
+	err = processLogs(context.TODO(), req)
 	dur := time.Since(start)
 	require.NoError(t, err)
 	require.Equal(t, 0, req.stats.newRecords)
@@ -210,7 +210,7 @@ func TestProcessLogsWithExpr(t *testing.T) {
 		t.Logf("\n%s", outBuf.String())
 
 		start := time.Now()
-		err = processLogs(req)
+		err = processLogs(context.TODO(), req)
 		dur := time.Since(start)
 		require.NoError(t, err)
 		t.Logf("processed %d records in %s (%.2f records/sec)", req.stats.recordsRetrieved, dur, float64(req.stats.recordsRetrieved)/dur.Seconds())
@@ -304,7 +304,7 @@ func TestProcessLogsWithRegex(t *testing.T) {
 		assert.Equal(t, len(req.cfg.GetRegexes()), len(test.regex))
 
 		start := time.Now()
-		err = processLogs(req)
+		err = processLogs(context.TODO(), req)
 		dur := time.Since(start)
 		assert.NoError(t, err)
 		t.Logf("processed %d records in %s (%.2f records/sec)", req.stats.recordsRetrieved, dur, float64(req.stats.recordsRetrieved)/dur.Seconds())
@@ -332,7 +332,7 @@ func BenchmarkProcessLogs(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, _ = req.r.(io.Seeker).Seek(0, io.SeekStart)
 		lruCache = lru.New(dedupCacheElements)
-		err = processLogs(req)
+		err = processLogs(context.TODO(), req)
 		require.NoError(b, err)
 	}
 }
@@ -349,7 +349,7 @@ func BenchmarkProcessLogsWithExpr(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, _ = req.r.(io.Seeker).Seek(0, io.SeekStart)
 		lruCache = lru.New(dedupCacheElements)
-		err = processLogs(req)
+		err = processLogs(context.TODO(), req)
 		require.NoError(b, err)
 	}
 }

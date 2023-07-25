@@ -34,3 +34,39 @@ data:
       {{ if .Values.spyderbat.expr }}
       expr: |{{ .Values.spyderbat.expr | nindent 8 }}
       {{ end }}
+
+      {{ if .Values.spyderbat.webhook }}
+      webhook:
+        endpoint_url: {{ .Values.spyderbat.webhook.endpoint_url }}
+        {{ if .Values.spyderbat.webhook.insecure }}
+        insecure: {{ .Values.spyderbat.webhook.insecure }}
+        {{ end }}
+        {{ if .Values.spyderbat.webhook.compression_algo }}
+        compression_algo: {{ .Values.spyderbat.webhook.compression_algo }}
+        {{ end }}
+        {{ if .Values.spyderbat.webhook.max_payload_bytes }}
+        max_payload_bytes: {{ .Values.spyderbat.webhook.max_payload_bytes }}
+        {{ end }}
+        {{ if .Values.spyderbat.webhook.authentication }}
+        authentication:
+          method: {{ .Values.spyderbat.webhook.authentication.method }}
+          {{ if .Values.spyderbat.webhook.authentication.parameters }}
+          parameters:
+            {{ if .Values.spyderbat.webhook.authentication.parameters.header_name }}
+            header_name: {{ .Values.spyderbat.webhook.authentication.parameters.header_name }}
+            {{ end }}
+            {{ if .Values.spyderbat.webhook.authentication.parameters.secret_key }}
+            secret_key: {{ .Values.spyderbat.webhook.authentication.parameters.secret_key }}
+            {{ end }}
+            {{ if .Values.spyderbat.webhook.authentication.parameters.hash_algo }}
+            hash_algo: {{ .Values.spyderbat.webhook.authentication.parameters.hash_algo }}
+            {{ end }}
+            {{ if .Values.spyderbat.webhook.authentication.parameters.username }}
+            username: {{ .Values.spyderbat.webhook.authentication.parameters.username }}
+            {{ end }}
+            {{ if .Values.spyderbat.webhook.authentication.parameters.password }}
+            password: {{ .Values.spyderbat.webhook.authentication.parameters.password }}
+            {{ end }}
+          {{ end }}
+        {{ end }}
+      {{ end }}

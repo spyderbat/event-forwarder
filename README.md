@@ -1,6 +1,14 @@
 # Spyderbat Event Forwarder
 
-The event forwarder is a small utility that consumes Spyderbat events from the API and emits flag files containing events, and optionally forwards events via syslog.
+The event forwarder is a small utility that consumes Spyderbat events from the API and emits flat files containing events and spydertraces. It optionally forwards the data it collects via syslog or using a webhook.
+
+## Features
+
+- Deploys as a systemd service on Linux or into Kubernetes using Helm
+- Consumes events and traces from the Spyderbat API
+- Writes data to flat files and/or stdout
+- Forwards events and traces via syslog or webhook (optional)
+- Supports filtering expressions to select events and traces to forward (optional)
 
 ## Requirements
 

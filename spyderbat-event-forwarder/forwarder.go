@@ -8,21 +8,26 @@ import (
 	"bufio"
 	"context"
 	"flag"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
 	"log/syslog"
 	"net"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"syscall"
 	"time"
 
 	"spyderbat-event-forwarder/api"
 	"spyderbat-event-forwarder/config"
+	_ "spyderbat-event-forwarder/logwrapper"
 	"spyderbat-event-forwarder/record"
+	"spyderbat-event-forwarder/webhook"
 
 	"github.com/antonmedv/expr/vm"
 	"github.com/golang/groupcache/lru"
@@ -190,6 +195,18 @@ func main() {
 		log.Printf("dns check successful: %s -> %s", cfg.APIHost, addr)
 	}
 
+	if cfg.Webhook != nil {
+		log.Printf("webhook endpoint: %s", cfg.Webhook.Endpoint)
+		log.Printf("webhook max payload bytes: %d", cfg.Webhook.MaxPayloadBytes)
+		log.Printf("webhook ignore cert validation: %v", cfg.Webhook.Insecure)
+		if cfg.Webhook.Authentication.Method != "" {
+			log.Printf("webhook authentication method: %s", cfg.Webhook.Authentication.Method)
+		}
+		log.Printf("webhook compression algorithm: %s", cfg.Webhook.CompressionAlgo)
+	} else {
+		log.Printf("webhook: disabled")
+	}
+
 	sapi := api.New(cfg, getUserAgent())
 	err = sapi.ValidateAPIReachability(context.Background())
 	if err != nil {
@@ -241,27 +258,44 @@ func main() {
 
 	eventLog := log.New(io.MultiWriter(logWriters...), "", 0)
 
-	var last record.RecordTime
-
 	// initial state: query from an hour ago until now
 	st := time.Now().Add(-1 * time.Hour)
 
-	startingUp := true
+	webhook := webhook.New(cfg.Webhook)
+
+	// do a graceful shutdown on SIGTERM or SIGINT
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGTERM, syscall.SIGINT)
+	ctx, cancel := context.WithCancel(context.Background())
+	shutdownComplete := make(chan bool, 1)
+	go func() {
+		<-sig
+		cancel()
+		log.Printf("got shutdown signal, shutting down")
+		webhook.Shutdown()
+		shutdownComplete <- true
+	}()
 
 	req := &processLogsRequest{
 		sapi:     sapi,
 		eventLog: eventLog,
-		last:     last,
 		stats:    new(logstats),
 		lastTime: lastTime,
 		cfg:      cfg,
+		webhook:  webhook,
 	}
 
-	for {
-		if !startingUp {
-			time.Sleep(requestDelay)
+	ticker := time.NewTicker(requestDelay)
+	initialTick := make(chan bool, 1)
+	initialTick <- true
+
+	for ctx.Err() == nil {
+		select {
+		case <-ctx.Done():
+			break
+		case <-ticker.C:
+		case <-initialTick:
 		}
-		startingUp = false
 
 		// query end time is always the current time
 		// todo: it might make sense to reduce this on startup to avoid requesting
@@ -293,16 +327,22 @@ func main() {
 
 		req.r = r
 
-		err = processLogs(req)
+		err = processLogs(ctx, req)
 		if err != nil {
 			log.Printf("error processing logs: %v", err)
 		}
 
-		log.Printf("%d new records (%d invalid, %d logged, %d filtered), most recent %v ago",
+		lastStr := ""
+		if req.stats.last > 0 {
+			lastStr = fmt.Sprintf(", most recent %v ago", et.Sub(req.stats.last.Time()).Round(time.Second))
+		}
+		log.Printf("%d new records (%d invalid, %d logged, %d filtered)%s",
 			req.stats.newRecords,
 			req.stats.invalidRecords,
 			req.stats.loggedRecords,
 			req.stats.filteredRecords,
-			et.Sub(req.stats.last.Time()).Round(time.Second))
+			lastStr)
 	}
+	<-shutdownComplete
+	log.Printf("shutdown complete")
 }

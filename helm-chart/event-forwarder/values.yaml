@@ -47,3 +47,15 @@ spyderbat:
   api_host: api.prod.spyderbat.com # api host to use
   #matching_filters: [".*"]  # only write out events that match these regex filters (json/yaml array of strings syntax)
   #expr: # filter events using an expression syntax
+  #webhook: # optional; default is no webhook
+  #  endpoint_url: https://example.com/webhook # required for webhook
+  #  compression_algo: zstd # optional [ zstd | gzip | default=none ]
+  #  max_payload_bytes: 500000 # optional; default is 1048576 (1 MiB); max is 10485760 (10 MiB)
+  #  authentication:
+  #    method: bearer # [ bearer | basic | hmac | shared_secret | default=none ]
+  #    parameters:
+  #      header_name: X-HMAC # value required for hmac and shared_secret
+  #      secret_key: base64-encoded-bearer-token # value required for bearer, hmac, and shared_secret
+  #      hash_algo: sha256 # required for "hmac" authentication method; must be "sha256"
+  #      username: username # value required for basic
+  #      password: base64-encoded-password # value required for basic

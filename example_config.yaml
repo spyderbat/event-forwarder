@@ -57,5 +57,25 @@ log_path: /opt/spyderbat-events/var/log
 # everything else except events with a schema starting with
 # "event_redflag:bogons:" or a severity of "low" or "medium".
 
+# Optionally send data to a webhook (e.g., Panther)
+#
+# For Panther, it is recommended to use bearer auth, zstd compression,
+# and a max payload of 500000 bytes.
+#
+# Panther does not currently support HMAC mode with compression enabled.
+# webhook:
+#   endpoint_url: https://example.com/webhook # required for webhook
+#   compression_algo: zstd # optional [ zstd | gzip | default=none ]
+#   max_payload_bytes: 500000 # optional; default is 1048576 (1 MiB); max is 10485760 (10 MiB)
+#   authentication:
+#     method: bearer # [ bearer | basic | hmac | shared_secret | default=none ]
+#     parameters:
+#       header_name: X-HMAC # value required for hmac and shared_secret
+#       secret_key: base64-encoded-bearer-token # value required for bearer, hmac, and shared_secret
+#       hash_algo: sha256 # required for "hmac" authentication method; must be "sha256"
+#       username: username # value required for basic
+#       password: base64-encoded-password # value required for basic
+
 # Optionally enable stdout logging -- useful in k8s and containers
-#stdout: true
+#
+# stdout: true

@@ -27,6 +27,7 @@ type Config struct {
 	APIKey                string   `yaml:"spyderbat_secret_api_key"`
 	LocalSyslogForwarding bool     `yaml:"local_syslog_forwarding"`
 	StdOut                bool     `yaml:"stdout"`
+	Webhook               *Webhook `yaml:"webhook"`
 	MatchRegex            []string `yaml:"matching_filters"`
 	Expr                  string   `yaml:"expr"`
 
@@ -134,7 +135,7 @@ func (c *Config) PrepareAndValidate() error {
 		c.reg = append(c.reg, regex)
 	}
 
-	return nil
+	return ValidateWebhook(c.Webhook)
 }
 
 // LoadConfig loads and parses a yaml config

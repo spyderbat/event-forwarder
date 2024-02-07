@@ -93,12 +93,13 @@ func processLogs(ctx context.Context, req *processLogsRequest) error {
 				// if the expression is invalid, emit the event and carry on
 				log.Printf("error evaluating expression: %s", err)
 				emit = true
-			}
-			if r, ok := out.(bool); ok {
-				emit = r
 			} else {
-				log.Printf("expression did not evaluate to a boolean: %v", out)
-				emit = true
+				if r, ok := out.(bool); ok {
+					emit = r
+				} else {
+					log.Printf("expression did not evaluate to a boolean: %v", out)
+					emit = true
+				}
 			}
 		} else {
 			emit = true

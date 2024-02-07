@@ -2,7 +2,9 @@
 // Copyright (C) 2022-2023 Spyderbat, Inc.
 // Use according to license terms.
 
-package main
+// logwrapper is a wrapper around the standard log package that forces all log output to be JSON
+// and adds a schema and unique ID to each log entry.
+package logwrapper
 
 import (
 	"crypto/rand"
@@ -32,7 +34,10 @@ func _uid() string {
 	return string(s[:length])
 }
 
-var uid = _uid()
+var (
+	uid    = _uid()
+	logger = setlogger()
+)
 
 type SchemaHook struct {
 	sequence atomic.Int64
@@ -44,9 +49,14 @@ func (h *SchemaHook) Run(e *zerolog.Event, level zerolog.Level, msg string) {
 	e.Float64("time", float64(time.Now().UnixNano())/1e9)
 }
 
-// Force all log output to be JSON
-func init() {
+func setlogger() *zerolog.Logger {
 	l := zerolog.New(log.Writer()).With().Logger().Hook(&SchemaHook{})
 	log.SetFlags(0)
 	log.SetOutput(l)
+	return &l
+}
+
+// Logger returns the global logger for packages that wish to use zerolog directly.
+func Logger() *zerolog.Logger {
+	return logger
 }

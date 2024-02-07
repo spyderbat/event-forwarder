@@ -16,6 +16,11 @@ var ErrInvalidID = errors.New("record does not contain an ID")
 // Time returns a native go time (in UTC) from a RecordTime
 func (r RecordTime) Time() time.Time { return time.Unix(0, int64(float64(1e9)*float64(r))) }
 
+// RecordTimeFromTime returns a RecordTime from a native go type
+func RecordTimeFromTime(t time.Time) RecordTime {
+	return RecordTime(float64(t.UnixNano()) / float64(1e9))
+}
+
 // SummaryFromJSON returns an ID and RecordTime from a JSON byte slice
 func SummaryFromJSON(data []byte) (string, RecordTime, error) {
 	fj := parserPool.Get()

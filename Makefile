@@ -7,7 +7,7 @@ help:
 	@echo please visit README.md
 
 tests:
-	go test ./...
+	go test -cover ./...
 
 release: clean tests
 	GOARCH=amd64 go build $(FLAGS) -o spyderbat-event-forwarder.x86_64 ./spyderbat-event-forwarder

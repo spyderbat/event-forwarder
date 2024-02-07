@@ -6,11 +6,13 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"log"
 	"spyderbat-event-forwarder/api"
 	"spyderbat-event-forwarder/config"
 	"spyderbat-event-forwarder/record"
+	"spyderbat-event-forwarder/webhook"
 )
 
 type logstats struct {
@@ -28,25 +30,25 @@ func (l *logstats) reset() {
 	l.invalidRecords = 0
 	l.filteredRecords = 0
 	l.loggedRecords = 0
-	l.last = 0
+	// don't reset last
 }
 
 type processLogsRequest struct {
 	r        io.ReadCloser
 	sapi     api.APIer
 	eventLog *log.Logger
-	last     record.RecordTime
 	stats    *logstats
 	lastTime record.RecordTime
 	cfg      *config.Config
+	webhook  *webhook.Webhook
 }
 
-func processLogs(req *processLogsRequest) error {
+func processLogs(ctx context.Context, req *processLogsRequest) error {
 	req.stats.reset()
 	defer req.r.Close()
 	scanner := bufio.NewScanner(req.r)
 
-	for scanner.Scan() {
+	for scanner.Scan() && ctx.Err() == nil {
 		req.stats.recordsRetrieved++
 		jsonRecord := scanner.Bytes()
 
@@ -92,14 +94,24 @@ func processLogs(req *processLogsRequest) error {
 				log.Printf("error evaluating expression: %s", err)
 				emit = true
 			} else {
-				emit = out.(bool)
+				if r, ok := out.(bool); ok {
+					emit = r
+				} else {
+					log.Printf("expression did not evaluate to a boolean: %v", out)
+					emit = true
+				}
 			}
 		} else {
 			emit = true
 		}
 		if emit {
 			req.stats.loggedRecords++
-			req.eventLog.Print(string(req.sapi.AugmentRuntimeDetailsJSON(jsonRecord)))
+			r := req.sapi.AugmentRuntimeDetailsJSON(jsonRecord)
+			req.eventLog.Print(string(r))
+			err = req.webhook.Send(r)
+			if err != nil {
+				log.Printf("error sending webhook: %s", err)
+			}
 		} else {
 			req.stats.filteredRecords++
 		}

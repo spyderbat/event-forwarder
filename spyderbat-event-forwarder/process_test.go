@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/expr-lang/expr"
 	"github.com/golang/groupcache/lru"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -91,7 +93,7 @@ func TestProcessLogs(t *testing.T) {
 	setupLogging(t)
 	req, eventLogBuf := setupTestRequest(t)
 
-	err := processLogs(req)
+	err := processLogs(context.TODO(), req)
 	require.NoError(t, err)
 
 	// all records should be valid
@@ -106,7 +108,7 @@ func TestProcessLogs(t *testing.T) {
 	// processing the same file again should result in no new records (deduplication)
 	req, _ = setupTestRequest(t)
 	start := time.Now()
-	err = processLogs(req)
+	err = processLogs(context.TODO(), req)
 	dur := time.Since(start)
 	require.NoError(t, err)
 	require.Equal(t, 0, req.stats.newRecords)
@@ -132,7 +134,8 @@ var exprTests = []exprTest{
 		false,
 	},
 	{
-		"false", logstats{
+		"false",
+		logstats{
 			recordsRetrieved: 5574,
 			newRecords:       5574,
 			invalidRecords:   0,
@@ -185,46 +188,57 @@ var exprTests = []exprTest{
 	},
 }
 
+// expr v1.16.0 does not return an error for this expression with AsBool()
+// https://github.com/expr-lang/expr/issues/551
+// v1.15.8 works.
+func TestExpectations(t *testing.T) {
+	_, err := expr.Compile("foo + 1", expr.AsBool())
+	require.Error(t, err)
+	t.Log(err)
+}
+
 func TestProcessLogsWithExpr(t *testing.T) {
 	outBuf := setupLogging(t)
 
 	for n, test := range exprTests {
-		outBuf.Reset()
-		t.Logf("testcase %d", n)
+		t.Run(fmt.Sprintf("%d", n), func(t *testing.T) {
+			outBuf.Reset()
 
-		// reset the LRU
-		lruCache = lru.New(dedupCacheElements)
+			// reset the LRU
+			lruCache = lru.New(dedupCacheElements)
 
-		req, eventLogBuf := setupTestRequest(t)
-		req.cfg.Expr = test.expr
-		err := req.cfg.PrepareAndValidate()
-		if test.expectedError {
-			require.Error(t, err)
-			t.Logf("got the expected error, next testcase")
-			t.Logf("%s", err.Error())
-			continue
-		}
-		require.NoError(t, err)
+			req, eventLogBuf := setupTestRequest(t)
+			req.cfg.Expr = test.expr
+			err := req.cfg.PrepareAndValidate()
+			t.Logf("testing expr: %s", test.expr)
 
-		t.Logf("testing expr: %s", req.cfg.GetExprProgram().Source.Content())
-		t.Logf("\n%s", outBuf.String())
+			if test.expectedError {
+				require.Error(t, err)
+				t.Logf("got the expected error, next testcase")
+				t.Logf("%s", err.Error())
+				return
+			}
+			require.NoError(t, err)
 
-		start := time.Now()
-		err = processLogs(req)
-		dur := time.Since(start)
-		require.NoError(t, err)
-		t.Logf("processed %d records in %s (%.2f records/sec)", req.stats.recordsRetrieved, dur, float64(req.stats.recordsRetrieved)/dur.Seconds())
+			t.Logf("\n%s", outBuf.String())
 
-		// all records should be valid
-		require.Equal(t, 0, req.stats.invalidRecords)
+			start := time.Now()
+			err = processLogs(context.TODO(), req)
+			dur := time.Since(start)
+			require.NoError(t, err)
+			t.Logf("processed %d records in %s (%.2f records/sec)", req.stats.recordsRetrieved, dur, float64(req.stats.recordsRetrieved)/dur.Seconds())
 
-		// we should have logged all records
-		eventLogLines := bytes.Count(eventLogBuf.Bytes(), []byte("\n"))
-		require.Equal(t, req.stats.loggedRecords, eventLogLines)
+			// all records should be valid
+			require.Equal(t, 0, req.stats.invalidRecords)
 
-		// verify stats
-		req.stats.last = 0
-		require.Equal(t, test.expectedStats, *req.stats)
+			// we should have logged all records
+			eventLogLines := bytes.Count(eventLogBuf.Bytes(), []byte("\n"))
+			require.Equal(t, req.stats.loggedRecords, eventLogLines)
+
+			// verify stats
+			req.stats.last = 0
+			require.Equal(t, test.expectedStats, *req.stats)
+		})
 	}
 
 }
@@ -304,7 +318,7 @@ func TestProcessLogsWithRegex(t *testing.T) {
 		assert.Equal(t, len(req.cfg.GetRegexes()), len(test.regex))
 
 		start := time.Now()
-		err = processLogs(req)
+		err = processLogs(context.TODO(), req)
 		dur := time.Since(start)
 		assert.NoError(t, err)
 		t.Logf("processed %d records in %s (%.2f records/sec)", req.stats.recordsRetrieved, dur, float64(req.stats.recordsRetrieved)/dur.Seconds())
@@ -332,7 +346,7 @@ func BenchmarkProcessLogs(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, _ = req.r.(io.Seeker).Seek(0, io.SeekStart)
 		lruCache = lru.New(dedupCacheElements)
-		err = processLogs(req)
+		err = processLogs(context.TODO(), req)
 		require.NoError(b, err)
 	}
 }
@@ -349,7 +363,7 @@ func BenchmarkProcessLogsWithExpr(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, _ = req.r.(io.Seeker).Seek(0, io.SeekStart)
 		lruCache = lru.New(dedupCacheElements)
-		err = processLogs(req)
+		err = processLogs(context.TODO(), req)
 		require.NoError(b, err)
 	}
 }

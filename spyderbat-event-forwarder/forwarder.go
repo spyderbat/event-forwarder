@@ -29,7 +29,7 @@ import (
 	"spyderbat-event-forwarder/record"
 	"spyderbat-event-forwarder/webhook"
 
-	"github.com/antonmedv/expr/vm"
+	"github.com/expr-lang/expr/vm"
 	"github.com/golang/groupcache/lru"
 	jsoniter "github.com/json-iterator/go"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -289,10 +289,11 @@ func main() {
 	initialTick := make(chan bool, 1)
 	initialTick <- true
 
+loop:
 	for ctx.Err() == nil {
 		select {
 		case <-ctx.Done():
-			break
+			break loop
 		case <-ticker.C:
 		case <-initialTick:
 		}

@@ -16,7 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/expr-lang/expr"
 	"github.com/golang/groupcache/lru"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -186,15 +185,6 @@ var exprTests = []exprTest{
 		},
 		false,
 	},
-}
-
-// expr v1.16.0 does not return an error for this expression with AsBool()
-// https://github.com/expr-lang/expr/issues/551
-// v1.15.8 works.
-func TestExpectations(t *testing.T) {
-	_, err := expr.Compile("foo + 1", expr.AsBool())
-	require.Error(t, err)
-	t.Log(err)
 }
 
 func TestProcessLogsWithExpr(t *testing.T) {

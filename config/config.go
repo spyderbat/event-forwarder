@@ -98,7 +98,7 @@ func (c *Config) PrepareAndValidate() error {
 			Key:   "expr",
 			Validator: func(i *configItem) error {
 				if len(*i.Value) > 0 {
-					program, err := expr.Compile(*i.Value, expr.AsBool())
+					program, err := expr.Compile(*i.Value, expr.AsBool(), expr.WarnOnAny())
 					c.exprProgram = program
 					return err
 				} else {

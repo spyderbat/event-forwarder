@@ -1,0 +1,235 @@
+fields:
+    - name: ancestors
+      type: array
+      element:
+        type: string
+    - name: args
+      type: array
+      element:
+        type: string
+    - name: auid
+      type: bigint
+    - name: auser
+      type: string
+    - name: class
+      type: array
+      element:
+        type: string
+    - name: description
+      type: string
+    - name: euser
+      type: string
+    - name: false_positive
+      type: boolean
+    - name: id
+      required: true
+      type: string
+    - name: linkback
+      type: string
+      indicators:
+        - url
+    - name: log_level
+      type: string
+    - name: message
+      type: string
+    - name: model_version
+      type: timestamp
+      timeFormats:
+        - unix
+    - name: muid
+      type: string
+    - name: name
+      type: string
+    - name: ref
+      type: string
+    - name: request
+      type: object
+      fields:
+        - name: action
+          type: string
+        - name: context_uid
+          type: string
+        - name: ip_address
+          type: string
+          indicators:
+            - ip
+        - name: org_uid
+          type: string
+        - name: principal
+          type: object
+          fields:
+            - name: email
+              type: string
+              indicators:
+                - email
+            - name: last_active
+              type: timestamp
+              timeFormats:
+                - rfc3339
+            - name: uid
+              type: string
+            - name: valid_from
+              type: timestamp
+              timeFormats:
+                - rfc3339
+            - name: valid_to
+              type: timestamp
+              timeFormats:
+                - rfc3339
+        - name: resource_name
+          type: string
+        - name: result
+          type: string
+    - name: routing
+      type: string
+    - name: runtime_details
+      type: object
+      fields:
+        - name: cloud_instance_id
+          type: string
+          indicators:
+            - aws_instance_id
+        - name: ip_addresses
+          type: array
+          element:
+            type: string
+            indicators:
+                - ip
+        - name: mac_addresses
+          type: array
+          element:
+            type: string
+            indicators:
+                - mac
+        - name: forwarder
+          type: string
+        - name: hostname
+          type: string
+    - name: schema
+      required: true
+      type: string
+    - name: severity
+      type: string
+    - name: short_name
+      type: string
+    - name: time
+      required: true
+      type: timestamp
+      timeFormats:
+      - unix
+      isEventTime: true
+    - name: traces
+      type: array
+      element:
+        type: string
+    - name: traces_suppressed
+      type: boolean
+    - name: uptime
+      type: float
+    - name: version
+      type: bigint
+    - name: valid_from
+      type: timestamp
+      timeFormats:
+      - unix
+    - name: valid_to
+      type: timestamp
+      timeFormats:
+      - unix
+    - name: active_nodes_count
+      type: bigint
+    - name: active_nodes_sample
+      type: array
+      element:
+        type: string
+    - name: activity_timestamps
+      type: array
+      element:
+        type: array
+        element:
+            type: float
+    - name: cluster_uid
+      type: string
+    - name: connection_count
+      type: bigint
+    - name: container
+      type: string
+      indicators:
+        - sha256
+    - name: container_uid
+      type: string
+    - name: depth
+      type: bigint
+    - name: duration
+      type: float
+    - name: expire_at
+      type: timestamp
+      timeFormats:
+        - unix
+    - name: fingerprint_uid
+      type: string
+    - name: flag_count
+      type: bigint
+
+    - name: interactive
+      type: boolean
+
+    - name: machine_count
+      type: bigint
+
+    - name: non_interactive_users
+      type: array
+      element:
+        type: string
+    - name: object_count
+      type: bigint
+    - name: pod_uid
+      type: string
+    - name: process_count
+      type: bigint
+    - name: root_node
+      type: string
+    - name: root_proc_name
+      type: string
+
+
+    - name: score
+      type: bigint
+    - name: severities
+      type: object
+      fields:
+        - name: high
+          type: bigint
+    - name: status
+      type: string
+    - name: suppressed
+      type: boolean
+    - name: trace_policy_uid
+      type: string
+    - name: trace_summary
+      type: string
+    - name: trigger
+      type: string
+    - name: trigger_ancestors
+      type: string
+    - name: trigger_cgroup
+      type: string
+    - name: trigger_class
+      type: string
+    - name: trigger_short_name
+      type: string
+    - name: unique_flag_count
+      type: bigint
+    - name: unique_severities
+      type: object
+      fields:
+        - name: critical
+          type: bigint
+        - name: high
+          type: bigint
+        - name: low
+          type: bigint
+        - name: medium
+          type: bigint
+
+

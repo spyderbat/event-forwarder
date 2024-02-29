@@ -20,7 +20,7 @@ log_path: /opt/spyderbat-events/var/log
 # will be logged.
 #
 # The expression syntax is documented here:
-#          https://expr.medv.io/docs/Language-Definition
+#          https://expr-lang.org/docs/language-definition
 #
 # If the expression fails to compile, the event forwarder will exit
 # with an error at startup.

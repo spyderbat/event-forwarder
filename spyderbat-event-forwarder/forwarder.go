@@ -1,16 +1,14 @@
 // Spyderbat Event Forwarder
-// Copyright (C) 2022-2023 Spyderbat, Inc.
+// Copyright (C) 2022-2024 Spyderbat, Inc.
 // Use according to license terms.
 
 package main
 
 import (
-	"bufio"
 	"context"
 	"flag"
 	"fmt"
 	"io"
-	"io/fs"
 	"log"
 	"log/syslog"
 	"net"
@@ -19,18 +17,17 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
-	"strings"
 	"syscall"
 	"time"
 
 	"spyderbat-event-forwarder/api"
 	"spyderbat-event-forwarder/config"
 	_ "spyderbat-event-forwarder/logwrapper"
+	"spyderbat-event-forwarder/lru"
 	"spyderbat-event-forwarder/record"
 	"spyderbat-event-forwarder/webhook"
 
 	"github.com/expr-lang/expr/vm"
-	"github.com/golang/groupcache/lru"
 	jsoniter "github.com/json-iterator/go"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -43,57 +40,16 @@ var (
 const (
 	requestDelay    = 30 * time.Second // how long to wait between requests
 	minQueryOverlap = 5 * time.Minute  // always look back at least this far
+	maxQueryTime    = 15 * time.Minute // don't query more than this at once
 
-	dedupCacheElements = 65536 * 10 // this is likely about 8MB per 64k cache entries
+	dedupCacheElements = 65536 * 10 // this ends up needing around a 4GB system
+
+	noisy = false
 )
 
 // This is a simple lru cache to de-duplicate results from the backend,
 // which will occur due to request window overlap and other reasons.
-// The hash key is a hash of the log data. There is no value.
-var lruCache = lru.New(dedupCacheElements)
-
-// loadState seeds the LRU from events already written to disk. It returns the most recent event time.
-func loadState(LogPath string) (record.RecordTime, error) {
-	lastTime := record.RecordTime(0)
-	LogPath = filepath.Clean(LogPath)
-	err := filepath.WalkDir(LogPath, func(path string, d fs.DirEntry, err error) error {
-		if d.Type().IsDir() && filepath.Dir(path) != filepath.Dir(LogPath) { // skip subdirs (except the root)
-			return fs.SkipDir // don't descend into subdirs
-		}
-		if err != nil {
-			return err
-		}
-		name := d.Name()
-		if d.Type().IsRegular() && strings.HasPrefix(name, "spyderbat_events") && strings.HasSuffix(name, ".log") {
-			f, err := os.Open(path)
-			if err != nil {
-				return err
-			}
-			defer f.Close()
-			cached := 0
-			scanner := bufio.NewScanner(f)
-			for scanner.Scan() {
-				b := scanner.Bytes()
-				if id, t, err := record.SummaryFromJSON(b); err == nil {
-					if t > lastTime {
-						lastTime = t
-					}
-					lruCache.Add(id, nil)
-					cached++
-				}
-			}
-			if scanner.Err() != nil {
-				return scanner.Err()
-			}
-			log.Printf("loaded %d IDs from %s", cached, path)
-		}
-		return nil
-	})
-	if err != nil {
-		return 0, err
-	}
-	return lastTime, nil
-}
+var lruCache *lru.LRU
 
 func printVersion() {
 	vcsrevision := ""
@@ -108,7 +64,7 @@ func printVersion() {
 				vcsrevision = v.Value
 			case "vcs.modified":
 				if v.Value == "true" {
-					vcsdirty = " (dirty)"
+					vcsdirty = "+dirty"
 				}
 			case "vcs.time":
 				vcstime = v.Value
@@ -215,9 +171,9 @@ func main() {
 		log.Printf("api server reachable")
 	}
 
-	lastTime, err := loadState(cfg.LogPath)
+	lruCache, err = lru.New(dedupCacheElements, cfg.LogPath)
 	if err != nil {
-		log.Printf("error loading state (ignored): %s", err)
+		log.Fatalf("fatal: unable to create or restore LRU cache: %s", err)
 	}
 
 	// create a self-rotating logger to write our events to
@@ -257,10 +213,6 @@ func main() {
 	}()
 
 	eventLog := log.New(io.MultiWriter(logWriters...), "", 0)
-
-	// initial state: query from an hour ago until now
-	st := time.Now().Add(-1 * time.Hour)
-
 	webhook := webhook.New(cfg.Webhook)
 
 	// do a graceful shutdown on SIGTERM or SIGINT
@@ -275,6 +227,13 @@ func main() {
 		webhook.Shutdown()
 		shutdownComplete <- true
 	}()
+
+	// initial state: query from an hour ago until now
+	st := cfg.GetCheckpoint(time.Now().Add(-1 * time.Hour))
+	lastTime := record.RecordTimeFromTime(st)
+	queryErrCount := 0
+	processErrCount := 0
+	const maxErrCount = 5
 
 	req := &processLogsRequest{
 		sapi:     sapi,
@@ -299,38 +258,71 @@ loop:
 		}
 
 		// query end time is always the current time
-		// todo: it might make sense to reduce this on startup to avoid requesting
-		// too much data at once
 		et := time.Now()
+		if et.Sub(st) > maxQueryTime {
+			// if we're trying to query too much data, limit the query to maxQueryTime
+			et = st.Add(maxQueryTime)
+		}
+
+		// If req.LastTime does not advance in the absence of errors, it will eventually
+		// move forward due to maxQueryTime. This is useful for when the processing pipeline
+		// is stalled for some reason.
 
 		// if we have recent events, set the start time to the most recent event time
-		if lastTime > 0 {
-			st = lastTime.Time()
+		if req.lastTime > 0 {
+			if noisy {
+				log.Printf("setting st from req.lastTime: %s", req.lastTime.Time())
+			}
+			st = req.lastTime.Time()
+			cfg.WriteCheckpoint(st)
 		}
 
-		// always look at least minQueryOverlap into the past
-		maxStart := et.Add(-minQueryOverlap)
-		if st.After(maxStart) {
-			st = maxStart
+		// If the start time is within 5 minutes of now, apply the minQueryOverlap.
+		// This allows us to catch events that may be working through the system slowly.
+		goBack := time.Now().Add(-minQueryOverlap)
+		if goBack.Before(st) {
+			if noisy {
+				log.Printf("adjusting st for min query overlap: %s -> %s", st, goBack)
+			}
+			st = goBack
 		}
 
-		// never look more than 4h into the past
-		minStart := et.Add(-4 * time.Hour)
-		if st.Before(minStart) {
-			st = minStart
+		if noisy {
+			log.Printf("querying source data from %s to %s (dur %v)", st, et, et.Sub(st))
 		}
-
 		r, err := sapi.SourceDataQuery(context.TODO(), st, et)
 		if err != nil {
-			log.Printf("error querying source data: %v", err)
+			queryErrCount++
+			if queryErrCount > maxErrCount {
+				// only log persistent errors; otherwise we'll just try again on the next loop iteration
+				log.Printf("error querying source data: %v", err)
+			}
 			continue
 		}
+		queryErrCount = 0
 
 		req.r = r
 
+		var now time.Time
+		if noisy {
+			now = time.Now()
+			log.Printf("processing logs from %s to %s (dur %v)", st, et, et.Sub(st))
+		}
 		err = processLogs(ctx, req)
 		if err != nil {
-			log.Printf("error processing logs: %v", err)
+			processErrCount++
+			if processErrCount > maxErrCount {
+				// only log persistent errors; otherwise we'll just try again on the next loop iteration
+				log.Printf("error processing logs: %v", err)
+			}
+		} else {
+			processErrCount = 0
+		}
+		// regardless of error, it's possible that some logs were processed.
+		// Errors will be corrected on the next loop iteration.
+
+		if noisy {
+			log.Printf("processed logs in %v", time.Since(now))
 		}
 
 		lastStr := ""

@@ -13,10 +13,10 @@ import (
 	"os"
 	"spyderbat-event-forwarder/api"
 	"spyderbat-event-forwarder/config"
+	"spyderbat-event-forwarder/lru"
 	"testing"
 	"time"
 
-	"github.com/golang/groupcache/lru"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -92,7 +92,12 @@ func TestProcessLogs(t *testing.T) {
 	setupLogging(t)
 	req, eventLogBuf := setupTestRequest(t)
 
-	err := processLogs(context.TODO(), req)
+	// reset the LRU
+	var err error
+	lruCache, err = lru.New(dedupCacheElements, t.TempDir())
+	require.NoError(t, err)
+
+	err = processLogs(context.TODO(), req)
 	require.NoError(t, err)
 
 	// all records should be valid
@@ -195,11 +200,13 @@ func TestProcessLogsWithExpr(t *testing.T) {
 			outBuf.Reset()
 
 			// reset the LRU
-			lruCache = lru.New(dedupCacheElements)
+			var err error
+			lruCache, err = lru.New(dedupCacheElements, t.TempDir())
+			require.NoError(t, err)
 
 			req, eventLogBuf := setupTestRequest(t)
 			req.cfg.Expr = test.expr
-			err := req.cfg.PrepareAndValidate()
+			err = req.cfg.PrepareAndValidate()
 			t.Logf("testing expr: %s", test.expr)
 
 			if test.expectedError {
@@ -288,11 +295,13 @@ func TestProcessLogsWithRegex(t *testing.T) {
 		t.Logf("testcase %d", n)
 
 		// reset the LRU
-		lruCache = lru.New(dedupCacheElements)
+		var err error
+		lruCache, err = lru.New(dedupCacheElements, t.TempDir())
+		require.NoError(t, err)
 
 		req, eventLogBuf := setupTestRequest(t)
 		req.cfg.MatchRegex = test.regex
-		err := req.cfg.PrepareAndValidate()
+		err = req.cfg.PrepareAndValidate()
 		if test.expectedError {
 			require.Error(t, err)
 			t.Logf("got the expected error, next testcase")
@@ -335,7 +344,8 @@ func BenchmarkProcessLogs(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		_, _ = req.r.(io.Seeker).Seek(0, io.SeekStart)
-		lruCache = lru.New(dedupCacheElements)
+		lruCache, err = lru.New(dedupCacheElements, b.TempDir())
+		require.NoError(b, err)
 		err = processLogs(context.TODO(), req)
 		require.NoError(b, err)
 	}
@@ -352,7 +362,8 @@ func BenchmarkProcessLogsWithExpr(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		_, _ = req.r.(io.Seeker).Seek(0, io.SeekStart)
-		lruCache = lru.New(dedupCacheElements)
+		lruCache, err = lru.New(dedupCacheElements, b.TempDir())
+		require.NoError(b, err)
 		err = processLogs(context.TODO(), req)
 		require.NoError(b, err)
 	}

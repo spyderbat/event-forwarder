@@ -1,3 +1,7 @@
+// Spyderbat Event Forwarder
+// Copyright (C) 2022-2024 Spyderbat, Inc.
+// Use according to license terms.
+
 package api
 
 import (
@@ -185,6 +189,11 @@ func (a *API) SourceDataQuery(ctx context.Context, st time.Time, et time.Time) (
 	if err != nil {
 		return nil, err
 	}
+
+	/*
+		ctxUid := getHeader(resp, "X-Context-Uid")
+		log.Printf("context uid: %s, st: %s, et: %s", ctxUid, st, et)
+	*/
 
 	if resp.StatusCode == http.StatusOK {
 		return resp.Body, nil

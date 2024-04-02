@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -81,6 +82,7 @@ type API struct {
 	client    *http.Client
 	muid      *xsync.MapOf[string, RuntimeDetails]
 	useragent string
+	debug     bool
 }
 
 type APIer interface {
@@ -122,6 +124,11 @@ func New(c *config.Config, UserAgent string) *API {
 		muid:      xsync.NewMapOf[RuntimeDetails](),
 		useragent: UserAgent,
 	}
+}
+
+// SetDebug enables or disables debug logging
+func (a *API) SetDebug(d bool) {
+	a.debug = d
 }
 
 func (a *API) ValidateAPIReachability(ctx context.Context) error {
@@ -190,10 +197,10 @@ func (a *API) SourceDataQuery(ctx context.Context, st time.Time, et time.Time) (
 		return nil, err
 	}
 
-	/*
+	if a.debug {
 		ctxUid := getHeader(resp, "X-Context-Uid")
 		log.Printf("context uid: %s, st: %s, et: %s", ctxUid, st, et)
-	*/
+	}
 
 	if resp.StatusCode == http.StatusOK {
 		return resp.Body, nil

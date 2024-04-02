@@ -164,6 +164,7 @@ func main() {
 	}
 
 	sapi := api.New(cfg, getUserAgent())
+	sapi.SetDebug(noisy)
 	err = sapi.ValidateAPIReachability(context.Background())
 	if err != nil {
 		log.Fatalf("fatal: unable to reach API server: %s", err)

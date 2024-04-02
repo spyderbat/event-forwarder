@@ -1,3 +1,7 @@
+// Spyderbat Event Forwarder
+// Copyright (C) 2022-2024 Spyderbat, Inc.
+// Use according to license terms.
+
 package config
 
 import (

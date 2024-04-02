@@ -1,3 +1,7 @@
+// Spyderbat Event Forwarder
+// Copyright (C) 2022-2024 Spyderbat, Inc.
+// Use according to license terms.
+
 package record
 
 import (
@@ -21,7 +25,7 @@ func RecordTimeFromTime(t time.Time) RecordTime {
 	return RecordTime(float64(t.UnixNano()) / float64(1e9))
 }
 
-// SummaryFromJSON returns an ID and RecordTime from a JSON byte slice
+// SummaryFromJSON returns an ID+version and RecordTime from a JSON byte slice
 func SummaryFromJSON(data []byte) (string, RecordTime, error) {
 	fj := parserPool.Get()
 	defer parserPool.Put(fj)
@@ -37,5 +41,12 @@ func SummaryFromJSON(data []byte) (string, RecordTime, error) {
 	if id == "" {
 		return "", RecordTime(0), ErrInvalidID
 	}
+
+	// IDs are not guaranteed to be unique, so we append the version if it exists
+	version := v.GetStringBytes("version")
+	if version != nil {
+		id = id + ":" + string(version)
+	}
+
 	return id, t, nil
 }

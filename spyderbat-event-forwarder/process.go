@@ -1,5 +1,5 @@
 // Spyderbat Event Forwarder
-// Copyright (C) 2022-2023 Spyderbat, Inc.
+// Copyright (C) 2022-2024 Spyderbat, Inc.
 // Use according to license terms.
 
 package main
@@ -34,13 +34,14 @@ func (l *logstats) reset() {
 }
 
 type processLogsRequest struct {
-	r        io.ReadCloser
-	sapi     api.APIer
-	eventLog *log.Logger
-	stats    *logstats
-	lastTime record.RecordTime
-	cfg      *config.Config
-	webhook  *webhook.Webhook
+	r        io.ReadCloser    // Input: The data to process
+	sapi     api.APIer        // Input: The API service to use for augmenting the data
+	eventLog *log.Logger      // Input: The logger to use for emitting events
+	cfg      *config.Config   // Input: The configuration to use for filtering
+	webhook  *webhook.Webhook // Input: The webhook to use for emitting events
+
+	stats    *logstats         // Return value: stats
+	lastTime record.RecordTime // Return value: the maximum record time seen in this request
 }
 
 func processLogs(ctx context.Context, req *processLogsRequest) error {
@@ -54,6 +55,7 @@ func processLogs(ctx context.Context, req *processLogsRequest) error {
 
 		// decode the record time
 		id, t, err := record.SummaryFromJSON(jsonRecord)
+		// this shows that the IDs are being read correctly
 		if err != nil {
 			log.Printf("error decoding record: %s [%s]", err, string(jsonRecord))
 			req.stats.invalidRecords++
@@ -61,15 +63,15 @@ func processLogs(ctx context.Context, req *processLogsRequest) error {
 		}
 
 		// de-duplicate
-		if _, exists := lruCache.Get(id); exists {
-			//log.Printf("skipping duplicate: %s", id)
+		if lruCache.Exists(id) {
 			continue
 		} else {
 			req.stats.newRecords++
-			lruCache.Add(id, nil)
+			lruCache.Add(id)
 		}
 
 		if t > req.lastTime {
+			req.lastTime = t
 			req.stats.last = t
 		}
 

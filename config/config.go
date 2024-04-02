@@ -1,5 +1,5 @@
 // Spyderbat Event Forwarder
-// Copyright (C) 2022-2023 Spyderbat, Inc.
+// Copyright (C) 2022-2024 Spyderbat, Inc.
 // Use according to license terms.
 
 package config
@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"regexp"
+	"time"
 
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
@@ -41,6 +43,32 @@ func (c *Config) GetExprProgram() *vm.Program {
 
 func (c *Config) GetRegexes() []*regexp.Regexp {
 	return c.reg
+}
+
+const checkpointFile = "checkpoint"
+
+func (c *Config) checkpointFile() string {
+	return filepath.Join(c.LogPath, checkpointFile)
+}
+
+// GetCheckpoint is a simple checkpointer for use on startup. If a checkpoint
+// file exists and can be accessed in the log path, it will return the modification
+// time of that file. Otherwise, it will return the provided fallback time.
+func (c *Config) GetCheckpoint(fallback time.Time) time.Time {
+	st, err := os.Stat(c.checkpointFile())
+	if err != nil {
+		f, _ := os.OpenFile(c.checkpointFile(), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
+		if f != nil {
+			f.Close()
+		}
+		c.WriteCheckpoint(fallback)
+		return fallback
+	}
+	return st.ModTime()
+}
+
+func (c *Config) WriteCheckpoint(at time.Time) error {
+	return os.Chtimes(c.checkpointFile(), at, at)
 }
 
 // configItem validation

@@ -265,16 +265,23 @@ loop:
 			et = st.Add(maxQueryTime)
 		}
 
-		// If req.LastTime does not advance in the absence of errors, it will eventually
-		// move forward due to maxQueryTime. This is useful for when the processing pipeline
-		// is stalled for some reason.
-
 		// if we have recent events, set the start time to the most recent event time
 		if req.lastTime > 0 {
-			if noisy {
-				log.Printf("setting st from req.lastTime: %s", req.lastTime.Time())
+			if processErrCount == 0 && req.stats.newRecords == 0 {
+				// we got no new records. Do we need to advance the start time?
+				if et.Before(time.Now().Add(-minQueryOverlap)) {
+					st = et
+					et = et.Add(minQueryOverlap)
+					if noisy {
+						log.Printf("advancing st to et: %s (no data within query window)", st)
+					}
+				}
+			} else {
+				if noisy {
+					log.Printf("setting st from req.lastTime: %s", req.lastTime.Time())
+				}
+				st = req.lastTime.Time()
 			}
-			st = req.lastTime.Time()
 			cfg.WriteCheckpoint(st)
 		}
 

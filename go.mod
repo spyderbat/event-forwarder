@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/expr-lang/expr v1.16.0
-	github.com/hashicorp/go-retryablehttp v0.7.5
+	github.com/hashicorp/go-retryablehttp v0.7.7
 	github.com/klauspost/compress v1.17.6
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/stretchr/testify v1.8.4
@@ -28,6 +28,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rs/zerolog v1.32.0
 	golang.org/x/crypto v0.21.0
-	golang.org/x/sys v0.18.0 // indirect
+	golang.org/x/sys v0.20.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

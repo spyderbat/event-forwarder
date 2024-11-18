@@ -1,11 +1,11 @@
 module spyderbat-event-forwarder
 
-go 1.22
+go 1.23.3
 
 require (
-	github.com/expr-lang/expr v1.16.0
-	github.com/hashicorp/go-retryablehttp v0.7.5
-	github.com/klauspost/compress v1.17.6
+	github.com/expr-lang/expr v1.16.9
+	github.com/hashicorp/go-retryablehttp v0.7.7
+	github.com/klauspost/compress v1.17.11
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/stretchr/testify v1.8.4
 	github.com/valyala/fastjson v1.6.4
@@ -26,8 +26,8 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/json-iterator/go v1.1.12
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/rs/zerolog v1.32.0
-	golang.org/x/crypto v0.21.0
-	golang.org/x/sys v0.18.0 // indirect
+	github.com/rs/zerolog v1.33.0
+	golang.org/x/crypto v0.29.0
+	golang.org/x/sys v0.27.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

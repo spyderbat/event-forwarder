@@ -210,3 +210,30 @@ func (a *API) SourceDataQuery(ctx context.Context, st time.Time, et time.Time) (
 
 	return nil, newAPIError(resp)
 }
+
+func (a *API) ForwardEventQuery(ctx context.Context, after time.Time) (io.ReadCloser, error) {
+	url := fmt.Sprintf("https://%s/org/%s/events/%d", a.config.APIHost, a.config.OrgUID, after.Unix())
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+a.config.APIKey)
+	req.Header.Add("Accept", "application/x-ndjson, application/ndjson")
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	if a.debug {
+		ctxUid := getHeader(resp, "X-Context-Uid")
+		log.Printf("context uid: %s, st: %s", ctxUid, after)
+	}
+
+	if resp.StatusCode == http.StatusOK {
+		return resp.Body, nil
+	}
+
+	resp.Body.Close()
+
+	return nil, newAPIError(resp)
+}

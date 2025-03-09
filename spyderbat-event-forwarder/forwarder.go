@@ -298,7 +298,7 @@ loop:
 		if noisy {
 			log.Printf("querying source data from %s to %s (dur %v)", st, et, et.Sub(st))
 		}
-		r, err := sapi.SourceDataQuery(context.TODO(), st, et)
+		r, err := sapi.ForwardEventQuery(context.TODO(), st)
 		if err != nil {
 			queryErrCount++
 			if queryErrCount > maxErrCount {

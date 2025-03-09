@@ -229,6 +229,7 @@ func (a *API) ForwardEventQuery(ctx context.Context, after time.Time) (io.ReadCl
 		log.Printf("context uid: %s, st: %s", ctxUid, after)
 	}
 
+	// Happy path
 	if resp.StatusCode == http.StatusOK {
 		return resp.Body, nil
 	}

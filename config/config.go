@@ -1,5 +1,5 @@
 // Spyderbat Event Forwarder
-// Copyright (C) 2022-2024 Spyderbat, Inc.
+// Copyright (C) 2022-2025 Spyderbat, Inc.
 // Use according to license terms.
 
 package config
@@ -9,11 +9,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"regexp"
-	"time"
+	"strings"
 
-	"github.com/expr-lang/expr"
-	"github.com/expr-lang/expr/vm"
 	"gopkg.in/yaml.v2"
 )
 
@@ -30,45 +27,41 @@ type Config struct {
 	LocalSyslogForwarding bool     `yaml:"local_syslog_forwarding"`
 	StdOut                bool     `yaml:"stdout"`
 	Webhook               *Webhook `yaml:"webhook"`
-	MatchRegex            []string `yaml:"matching_filters"`
-	Expr                  string   `yaml:"expr"`
-
-	exprProgram *vm.Program
-	reg         []*regexp.Regexp
 }
 
-func (c *Config) GetExprProgram() *vm.Program {
-	return c.exprProgram
+const iteratorFile = "iterator"
+
+func (c *Config) iteratorFile() string {
+	return filepath.Join(c.LogPath, iteratorFile)
 }
 
-func (c *Config) GetRegexes() []*regexp.Regexp {
-	return c.reg
-}
-
-const checkpointFile = "checkpoint"
-
-func (c *Config) checkpointFile() string {
-	return filepath.Join(c.LogPath, checkpointFile)
-}
-
-// GetCheckpoint is a simple checkpointer for use on startup. If a checkpoint
-// file exists and can be accessed in the log path, it will return the modification
-// time of that file. Otherwise, it will return the provided fallback time.
-func (c *Config) GetCheckpoint(fallback time.Time) time.Time {
-	st, err := os.Stat(c.checkpointFile())
+// GetIterator returns the last stored iterator, or the fallback if it doesn't exist.
+func (c *Config) GetIterator(fallback string) (string, error) {
+	iteratorBytes, err := os.ReadFile(c.iteratorFile())
 	if err != nil {
-		f, _ := os.OpenFile(c.checkpointFile(), os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
-		if f != nil {
-			f.Close()
+		if os.IsNotExist(err) {
+			return fallback, nil
 		}
-		c.WriteCheckpoint(fallback)
-		return fallback
+		return "", fmt.Errorf("failed to read iterator file: %w", err)
 	}
-	return st.ModTime()
+	iterator := strings.TrimSpace(string(iteratorBytes))
+	// If the file is empty, return the fallback
+	if len(iterator) == 0 {
+		return fallback, nil
+	}
+	// If the file is not empty, return the iterator
+	return string(iterator), nil
 }
 
-func (c *Config) WriteCheckpoint(at time.Time) error {
-	return os.Chtimes(c.checkpointFile(), at, at)
+func (c *Config) WriteIterator(iterator string) error {
+	tmpFile := c.iteratorFile() + ".tmp"
+	if err := os.WriteFile(tmpFile, []byte(iterator), 0600); err != nil {
+		return fmt.Errorf("failed to write iterator file: %w", err)
+	}
+	if err := os.Rename(tmpFile, c.iteratorFile()); err != nil {
+		return fmt.Errorf("failed to rename iterator file: %w", err)
+	}
+	return nil
 }
 
 // configItem validation
@@ -121,19 +114,6 @@ func (c *Config) PrepareAndValidate() error {
 			Key:      "spyderbat_secret_api_key",
 			Required: true,
 		},
-		{
-			Value: &c.Expr,
-			Key:   "expr",
-			Validator: func(i *configItem) error {
-				if len(*i.Value) > 0 {
-					program, err := expr.Compile(*i.Value, expr.AsBool(), expr.WarnOnAny())
-					c.exprProgram = program
-					return err
-				} else {
-					return nil
-				}
-			},
-		},
 	}
 
 	for _, v := range validation {
@@ -149,18 +129,6 @@ func (c *Config) PrepareAndValidate() error {
 				return fmt.Errorf("failed to validate config key '%s': %w", v.Key, err)
 			}
 		}
-	}
-
-	if len(c.MatchRegex) > 0 && len(c.Expr) > 0 {
-		return fmt.Errorf("cannot use both 'expr' and 'matching_filters'")
-	}
-
-	for _, regex := range c.MatchRegex {
-		regex, err := regexp.Compile(regex)
-		if err != nil {
-			return fmt.Errorf("failed to compile regex '%s': %w", regex, err)
-		}
-		c.reg = append(c.reg, regex)
 	}
 
 	return ValidateWebhook(c.Webhook)

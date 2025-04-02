@@ -1,5 +1,5 @@
 // Spyderbat Event Forwarder
-// Copyright (C) 2022-2023 Spyderbat, Inc.
+// Copyright (C) 2022-2025 Spyderbat, Inc.
 // Use according to license terms.
 
 // logwrapper is a wrapper around the standard log package that forces all log output to be JSON

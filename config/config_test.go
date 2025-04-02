@@ -1,43 +1,41 @@
 // Spyderbat Event Forwarder
-// Copyright (C) 2022-2024 Spyderbat, Inc.
+// Copyright (C) 2022-2025 Spyderbat, Inc.
 // Use according to license terms.
 
 package config
 
 import (
-	"os"
 	"testing"
-	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 )
 
-func TestCheckpoint(t *testing.T) {
-
-	defaultTime, err := time.Parse(time.RFC3339, "2022-01-01T00:00:00Z")
+func TestIterator(t *testing.T) {
+	defaultIterator, err := uuid.NewRandom()
 	require.NoError(t, err)
 
 	c := Config{
 		LogPath: t.TempDir(),
 	}
 
-	cp := c.GetCheckpoint(defaultTime)
+	cp, err := c.GetIterator(defaultIterator.String())
+	require.NoError(t, err)
 
-	t.Run("NewCheckpoint", func(t *testing.T) {
-		require.Equal(t, defaultTime, cp)
-		_, err = os.Stat(c.checkpointFile())
+	t.Run("NewIterator", func(t *testing.T) {
+		require.Equal(t, defaultIterator.String(), cp)
+	})
+	newIterator, err := uuid.NewRandom()
+	require.NoError(t, err)
+	err = c.WriteIterator(newIterator.String())
+	require.NoError(t, err)
+	cp, err = c.GetIterator(defaultIterator.String())
+	require.NoError(t, err)
+	require.Equal(t, newIterator.String(), cp)
+	t.Run("ExistingIterator", func(t *testing.T) {
+		newDefault := "abcd1234"
+		cp, err = c.GetIterator(newDefault)
 		require.NoError(t, err)
-	})
-
-	t.Run("ExistingCheckpoint", func(t *testing.T) {
-		cp = c.GetCheckpoint(time.Now())
-		require.NotEqual(t, defaultTime.Round(time.Second), cp.Round(time.Second))
-	})
-
-	t.Run("WriteCheckpoint", func(t *testing.T) {
-		now := time.Now()
-		c.WriteCheckpoint(now)
-		cp = c.GetCheckpoint(defaultTime)
-		require.Equal(t, now.Round(time.Second), cp.Round(time.Second))
+		require.Equal(t, newIterator.String(), cp)
 	})
 }

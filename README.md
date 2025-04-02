@@ -8,7 +8,6 @@ The event forwarder is a small utility that consumes Spyderbat events from the A
 - Consumes events and traces from the Spyderbat API
 - Writes data to flat files and/or stdout
 - Forwards events and traces via syslog or webhook (optional)
-- Supports filtering expressions to select events and traces to forward (optional)
 
 ## Requirements
 

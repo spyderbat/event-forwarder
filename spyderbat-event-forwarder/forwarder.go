@@ -1,13 +1,13 @@
 // Spyderbat Event Forwarder
-// Copyright (C) 2022-2024 Spyderbat, Inc.
+// Copyright (C) 2022-2025 Spyderbat, Inc.
 // Use according to license terms.
 
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
-	"fmt"
 	"io"
 	"log"
 	"log/syslog"
@@ -23,33 +23,21 @@ import (
 	"spyderbat-event-forwarder/api"
 	"spyderbat-event-forwarder/config"
 	_ "spyderbat-event-forwarder/logwrapper"
-	"spyderbat-event-forwarder/lru"
-	"spyderbat-event-forwarder/record"
 	"spyderbat-event-forwarder/webhook"
 
-	"github.com/expr-lang/expr/vm"
 	jsoniter "github.com/json-iterator/go"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var (
-	json   = jsoniter.ConfigCompatibleWithStandardLibrary
-	exprVM = vm.VM{} // exprVM is reused on each request
+	json = jsoniter.ConfigCompatibleWithStandardLibrary
 )
 
 const (
-	requestDelay    = 30 * time.Second // how long to wait between requests
-	minQueryOverlap = 5 * time.Minute  // always look back at least this far
-	maxQueryTime    = 15 * time.Minute // don't query more than this at once
-
-	dedupCacheElements = 65536 * 10 // this ends up needing around a 4GB system
-
-	noisy = false
+	requestDelay      = 30 * time.Second // how long to wait between requests while in steady state
+	recordsPerRequest = 10000
+	noisy             = false
 )
-
-// This is a simple lru cache to de-duplicate results from the backend,
-// which will occur due to request window overlap and other reasons.
-var lruCache *lru.LRU
 
 func printVersion() {
 	vcsrevision := ""
@@ -79,7 +67,7 @@ func printVersion() {
 
 	vcsrevision = vcsrevision[:7] // short hash
 
-	log.Printf("starting spyderbat-event-forwarder (commit %s%s; %s; %s; %s)", vcsrevision, vcsdirty, vcstime, version, runtime.GOARCH)
+	log.Printf("starting spyderbat-event-forwarder/v2 (commit %s%s; %s; %s; %s)", vcsrevision, vcsdirty, vcstime, version, runtime.GOARCH)
 }
 
 func getUserAgent() string {
@@ -172,11 +160,6 @@ func main() {
 		log.Printf("api server reachable")
 	}
 
-	lruCache, err = lru.New(dedupCacheElements, cfg.LogPath)
-	if err != nil {
-		log.Fatalf("fatal: unable to create or restore LRU cache: %s", err)
-	}
-
 	// create a self-rotating logger to write our events to
 	logWriters := []io.Writer{
 		&lumberjack.Logger{
@@ -229,120 +212,81 @@ func main() {
 		shutdownComplete <- true
 	}()
 
-	// initial state: query from an hour ago until now
-	st := cfg.GetCheckpoint(time.Now().Add(-1 * time.Hour))
-	lastTime := record.RecordTimeFromTime(st)
+	iterator, err := cfg.GetIterator("OLDEST")
+	if err != nil {
+		log.Fatalf("fatal: unable to get current iterator: %s", err)
+	}
+
 	queryErrCount := 0
-	processErrCount := 0
+	records := 0
 	const maxErrCount = 5
 
 	req := &processLogsRequest{
 		sapi:     sapi,
 		eventLog: eventLog,
 		stats:    new(logstats),
-		lastTime: lastTime,
-		cfg:      cfg,
 		webhook:  webhook,
 	}
 
-	ticker := time.NewTicker(requestDelay)
-	initialTick := make(chan bool, 1)
-	initialTick <- true
+	buf := &bytes.Buffer{}
 
+	delay := time.Second // Start log ingestion immediately
 loop:
 	for ctx.Err() == nil {
 		select {
+		case <-time.After(delay):
 		case <-ctx.Done():
 			break loop
-		case <-ticker.C:
-		case <-initialTick:
-		}
-
-		// query end time is always the current time
-		et := time.Now()
-		if et.Sub(st) > maxQueryTime {
-			// if we're trying to query too much data, limit the query to maxQueryTime
-			et = st.Add(maxQueryTime)
-		}
-
-		// if we have recent events, set the start time to the most recent event time
-		if req.lastTime > 0 {
-			if processErrCount == 0 && req.stats.newRecords == 0 {
-				// we got no new records. Do we need to advance the start time?
-				if et.Before(time.Now().Add(-minQueryOverlap)) {
-					st = et
-					et = et.Add(minQueryOverlap)
-					if noisy {
-						log.Printf("advancing st to et: %s (no data within query window)", st)
-					}
-				}
-			} else {
-				if noisy {
-					log.Printf("setting st from req.lastTime: %s", req.lastTime.Time())
-				}
-				st = req.lastTime.Time()
-			}
-			cfg.WriteCheckpoint(st)
-		}
-
-		// If the start time is within 5 minutes of now, apply the minQueryOverlap.
-		// This allows us to catch events that may be working through the system slowly.
-		goBack := time.Now().Add(-minQueryOverlap)
-		if goBack.Before(st) {
-			if noisy {
-				log.Printf("adjusting st for min query overlap: %s -> %s", st, goBack)
-			}
-			st = goBack
 		}
 
 		if noisy {
-			log.Printf("querying source data from %s to %s (dur %v)", st, et, et.Sub(st))
+			log.Printf("querying events from iterator=%s", iterator)
 		}
-		r, err := sapi.SourceDataQuery(context.TODO(), st, et)
+
+		buf.Reset()
+		records, iterator, err = sapi.LoadEvents(context.TODO(), iterator, recordsPerRequest, buf)
 		if err != nil {
+			delay = requestDelay
 			queryErrCount++
 			if queryErrCount > maxErrCount {
 				// only log persistent errors; otherwise we'll just try again on the next loop iteration
-				log.Printf("error querying source data: %v", err)
+				log.Printf("error querying events: %v", err)
 			}
 			continue
 		}
 		queryErrCount = 0
+		if cfg.WriteIterator(iterator) != nil {
+			log.Fatalf("fatal: unable to write iterator file: %s", err)
+		}
 
-		req.r = r
+		req.r = buf
 
 		var now time.Time
 		if noisy {
 			now = time.Now()
-			log.Printf("processing logs from %s to %s (dur %v)", st, et, et.Sub(st))
+			log.Printf("processing %d bytes ending in iterator %s", buf.Len(), iterator)
 		}
-		err = processLogs(ctx, req)
-		if err != nil {
-			processErrCount++
-			if processErrCount > maxErrCount {
-				// only log persistent errors; otherwise we'll just try again on the next loop iteration
-				log.Printf("error processing logs: %v", err)
-			}
-		} else {
-			processErrCount = 0
-		}
-		// regardless of error, it's possible that some logs were processed.
-		// Errors will be corrected on the next loop iteration.
+
+		processLogs(ctx, req)
 
 		if noisy {
 			log.Printf("processed logs in %v", time.Since(now))
 		}
 
-		lastStr := ""
-		if req.stats.last > 0 {
-			lastStr = fmt.Sprintf(", most recent %v ago", et.Sub(req.stats.last.Time()).Round(time.Second))
-		}
-		log.Printf("%d new records (%d invalid, %d logged, %d filtered)%s",
-			req.stats.newRecords,
+		log.Printf("%d new records (%d invalid, %d logged)",
+			req.stats.recordsRetrieved,
 			req.stats.invalidRecords,
-			req.stats.loggedRecords,
-			req.stats.filteredRecords,
-			lastStr)
+			req.stats.loggedRecords)
+
+		if records >= recordsPerRequest {
+			// if we got the number of records we requested, then we can assume that
+			// more are available and we should immediately query again
+			delay = 1 * time.Second
+		} else {
+			// if we got fewer records than we requested, then we should delay
+			// before querying again, to avoid hammering the API
+			delay = requestDelay
+		}
 	}
 	<-shutdownComplete
 	log.Printf("shutdown complete")

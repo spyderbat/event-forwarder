@@ -48,8 +48,7 @@ func TestWebhookSimple(t *testing.T) {
 	require.NoError(t, err)
 	h := New(cfg)
 
-	err = h.Send(expectedBody)
-	assert.NoError(t, err)
+	h.Send(expectedBody)
 
 	h.Shutdown()
 	ts.Close()
@@ -90,8 +89,7 @@ func TestWebhookSweep(t *testing.T) {
 	require.NoError(t, err)
 	h := New(cfg)
 
-	err = h.Send(expectedBody)
-	assert.NoError(t, err)
+	h.Send(expectedBody)
 
 	<-visited // the request should be sent before shutdown
 
@@ -132,8 +130,7 @@ func TestWebhookGzip(t *testing.T) {
 	require.NoError(t, err)
 	h := New(cfg)
 
-	err = h.Send(expectedBody)
-	assert.NoError(t, err)
+	h.Send(expectedBody)
 
 	h.Shutdown()
 	ts.Close()
@@ -173,8 +170,7 @@ func TestWebhookZstd(t *testing.T) {
 	require.NoError(t, err)
 	h := New(cfg)
 
-	err = h.Send(expectedBody)
-	assert.NoError(t, err)
+	h.Send(expectedBody)
 
 	h.Shutdown()
 	ts.Close()
@@ -222,8 +218,7 @@ func TestWebhookHMAC(t *testing.T) {
 	require.NoError(t, err)
 	h := New(cfg)
 
-	err = h.Send(expectedBody)
-	assert.NoError(t, err)
+	h.Send(expectedBody)
 
 	h.Shutdown()
 	ts.Close()
@@ -276,8 +271,7 @@ func TestWebhookZstdHMAC(t *testing.T) {
 	require.NoError(t, err)
 	h := New(cfg)
 	require.NotNil(t, h)
-	err = h.Send(expectedPayload)
-	require.NoError(t, err)
+	h.Send(expectedPayload)
 
 	h.Shutdown()
 	ts.Close()
@@ -317,8 +311,7 @@ func TestWebhookLarge(t *testing.T) {
 	bytesSent := 0
 
 	for bytesSent < maxPayloadBytes*2 {
-		err := h.Send(msg)
-		assert.NoError(t, err)
+		h.Send(msg)
 		bytesSent += len(msg)
 	}
 
@@ -364,8 +357,7 @@ func TestWebhookBasicAuth(t *testing.T) {
 	require.NoError(t, err)
 	h := New(cfg)
 
-	err = h.Send(expectedBody)
-	assert.NoError(t, err)
+	h.Send(expectedBody)
 
 	h.Shutdown()
 	ts.Close()
@@ -405,8 +397,7 @@ func TestWebhookSharedSecret(t *testing.T) {
 	require.NoError(t, err)
 	h := New(cfg)
 
-	err = h.Send(expectedBody)
-	assert.NoError(t, err)
+	h.Send(expectedBody)
 
 	h.Shutdown()
 	ts.Close()
@@ -445,8 +436,7 @@ func TestWebhookBearer(t *testing.T) {
 	require.NoError(t, err)
 	h := New(cfg)
 
-	err = h.Send(expectedBody)
-	assert.NoError(t, err)
+	h.Send(expectedBody)
 
 	h.Shutdown()
 	ts.Close()
@@ -458,8 +448,7 @@ func TestNilSafe(t *testing.T) {
 	h := New(nil)
 	assert.Nil(t, h)
 
-	err := h.Send([]byte(`{"foo":"bar"}`))
-	assert.NoError(t, err)
+	h.Send([]byte(`{"foo":"bar"}`))
 
 	h.Shutdown()
 }

@@ -1,5 +1,5 @@
 // Spyderbat Event Forwarder
-// Copyright (C) 2022-2024 Spyderbat, Inc.
+// Copyright (C) 2022-2025 Spyderbat, Inc.
 // Use according to license terms.
 
 package config

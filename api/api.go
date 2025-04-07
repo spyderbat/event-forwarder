@@ -1,11 +1,13 @@
 // Spyderbat Event Forwarder
-// Copyright (C) 2022-2024 Spyderbat, Inc.
+// Copyright (C) 2022-2025 Spyderbat, Inc.
 // Use according to license terms.
 
 package api
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -182,31 +184,54 @@ func (a *API) SourceQuery(ctx context.Context) (io.ReadCloser, error) {
 	return nil, newAPIError(resp)
 }
 
-// SourceDataQuery queries the API for events within a time range
-func (a *API) SourceDataQuery(ctx context.Context, st time.Time, et time.Time) (io.ReadCloser, error) {
-	url := fmt.Sprintf("https://%s%s%s/data?dt=redflags&st=%d&et=%d", a.config.APIHost, urlBase, a.config.OrgUID, st.Unix(), et.Unix())
+type IteratorJSON struct {
+	Iterator string `json:"iterator"`
+}
 
+// LoadEvents queries the API for events using the given iterator and writes the results to the given writer.
+func (a *API) LoadEvents(ctx context.Context, iterator string, limit int, writeTo io.Writer) (records int, nextIterator string, anErr error) {
+	url := fmt.Sprintf("https://%s%s%s/events/%s", a.config.APIHost, urlBase, a.config.OrgUID, iterator)
+	if limit > 0 {
+		url += fmt.Sprintf("?limit=%d", limit)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return 0, iterator, err
 	}
 	req.Header.Add("Authorization", "Bearer "+a.config.APIKey)
 	req.Header.Add("Accept", "application/x-ndjson, application/ndjson")
 	resp, err := a.client.Do(req)
 	if err != nil {
-		return nil, err
+		return 0, iterator, err
 	}
+	defer resp.Body.Close()
 
 	if a.debug {
 		ctxUid := getHeader(resp, "X-Context-Uid")
-		log.Printf("context uid: %s, st: %s, et: %s", ctxUid, st, et)
+		log.Printf("context uid: %s", ctxUid)
 	}
 
-	if resp.StatusCode == http.StatusOK {
-		return resp.Body, nil
+	if resp.StatusCode != http.StatusOK {
+		return 0, iterator, newAPIError(resp)
 	}
 
-	resp.Body.Close()
+	// Read a line at a time and copy it to writeTo
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		nextIter := IteratorJSON{}
+		_ = json.Unmarshal(line, &nextIter)
+		if len(nextIter.Iterator) > 0 {
+			nextIterator = nextIter.Iterator
+		} else {
+			records++
+			_, _ = writeTo.Write(line)
+			_, _ = writeTo.Write([]byte("\n"))
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return records, iterator, err
+	}
+	return records, nextIterator, nil
 
-	return nil, newAPIError(resp)
 }

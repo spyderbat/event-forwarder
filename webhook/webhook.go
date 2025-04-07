@@ -288,16 +288,12 @@ func (h *Webhook) send(p *payload) error {
 
 // Send queues an event for sending to the webhook. It will be sent asynchronously.
 // Calling Send after Shutdown will panic.
-func (h *Webhook) Send(event []byte) error {
-	if h == nil {
-		return nil
-	}
-	if len(event) == 0 {
-		return ErrEmptyPayload
+func (h *Webhook) Send(event []byte) {
+	if h == nil || len(event) == 0 {
+		return
 	}
 
 	h.messageQueue <- event
-	return nil
 }
 
 // Shutdown flushes the queue and shuts down the webhook. It will block until the queue is empty.

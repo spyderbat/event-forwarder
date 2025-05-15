@@ -54,6 +54,7 @@ updatecontainer: container-arm64 container-amd64
 	docker manifest create public.ecr.aws/a6j2k0g1/event-forwarder:latest \
 		--amend public.ecr.aws/a6j2k0g1/event-forwarder:latest-amd64 \
 		--amend public.ecr.aws/a6j2k0g1/event-forwarder:latest-arm64
+	docker manifest push public.ecr.aws/a6j2k0g1/event-forwarder:latest
 
 prune:
 	docker buildx prune -f
